@@ -1,0 +1,1314 @@
+/* ==========================================================================
+   1. CSS Reset & Base
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Global utility: hidden — used by JS for show/hide toggling */
+.hidden {
+  display: none !important;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: -0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: var(--font-feature-settings);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Selection — Vercel dark polarity (selection-bg / selection-fg) */
+::selection {
+  background: #171717;
+  color: #f2f2f2;
+}
+
+
+/* ==========================================================================
+   2. Layout
+   ========================================================================== */
+
+.app-container {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.main-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  position: relative;
+  min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* ==========================================================================
+   3. Sidebar
+   ========================================================================== */
+
+.sidebar-logo {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px 24px;
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logo-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.logo-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+}
+
+.sidebar-link {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: var(--transition);
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+}
+
+.sidebar-link.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.sidebar-link:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+
+/* ==========================================================================
+   4. Tab System
+   ========================================================================== */
+
+.tab-content {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.tab-content.active {
+  display: flex;
+}
+
+.tab-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.tab-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+h3 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+
+/* ==========================================================================
+   5. Documents - Upload Zone
+   ========================================================================== */
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-xl);
+  padding: 48px;
+  text-align: center;
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.upload-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  stroke: var(--text-secondary);
+}
+
+.upload-title {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.upload-progress {
+  margin-top: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.3s ease, background 0.3s ease;
+  border-radius: 2px;
+}
+
+.progress-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  transition: color 0.3s ease;
+}
+
+.progress-text.uploading {
+  color: var(--accent);
+}
+
+.progress-text.success {
+  color: var(--accent-success);
+  font-weight: 500;
+}
+
+.progress-text.error {
+  color: var(--accent-error);
+  font-weight: 500;
+}
+
+
+/* ==========================================================================
+   6. Documents - Card Grid
+   ========================================================================== */
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* ── JS-rendered card layout ── */
+
+.doc-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+  position: relative;
+}
+
+.doc-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.doc-card-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.doc-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-card-filename {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-card-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doc-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--link-bg-soft);
+  color: var(--accent);
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+.doc-card-chunks,
+.doc-card-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.doc-card-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: var(--transition);
+  font-family: inherit;
+  line-height: 1;
+  padding: 0;
+}
+
+.doc-card-delete:hover {
+  background: var(--error-soft);
+  color: var(--accent-error);
+  border-color: var(--accent-error);
+}
+
+
+/* ==========================================================================
+   7. Empty State
+   ========================================================================== */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 64px;
+  padding-bottom: 64px;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+  color: var(--text-secondary);
+}
+
+.empty-title {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+
+/* ==========================================================================
+   8. QA - Mode Tabs
+   ========================================================================== */
+
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.mode-btn.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.mode-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.mode-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rag-dot {
+  background: var(--rag-highlight);
+}
+
+.bare-dot {
+  background: var(--bare-llm);
+}
+
+
+/* ==========================================================================
+   9. Chat Messages
+   ========================================================================== */
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---- Message Bubble (matches JS class names) ---- */
+
+.message-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: -0.02em;
+  animation: fadeInUp 0.3s ease-out;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.message-bubble.message-user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble.message-assistant {
+  align-self: flex-start;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble.streaming::after {
+  content: '|';
+  animation: blink 0.8s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+  font-weight: 700;
+}
+
+/* ---- Role Label (AI / You) ---- */
+
+.message-role {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.message-role.ai-label {
+  color: var(--rag-highlight);
+}
+
+.message-role.user-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ---- Message Content ---- */
+
+.message-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: -0.02em;
+}
+
+/* ---- Message Meta (retrieval info etc.) ---- */
+
+.message-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+
+/* ==========================================================================
+   10. Compare Split View
+   ========================================================================== */
+
+.compare-container {
+  flex: 1 1 0%;
+  width: 100%;
+  display: grid;
+  /* 3 children: rag-pane | divider | bare-pane */
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.compare-container.hidden {
+  display: none;
+}
+
+.compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* prevent grid blowout */
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compare-divider {
+  width: 2px;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.compare-divider:hover {
+  background: var(--accent);
+}
+
+.rag-pane .pane-header {
+  border-left: 3px solid var(--rag-highlight);
+}
+
+.bare-pane .pane-header {
+  border-left: 3px solid var(--bare-llm);
+}
+
+.pane-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.pane-badge {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.pane-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  min-height: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Restored compare history text */
+.pane-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.pane-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pane-error {
+  color: var(--accent-error);
+  font-size: 13px;
+  padding: 8px 16px;
+  background: var(--error-soft);
+  border-radius: var(--radius-md);
+  margin: 8px;
+}
+
+/* Compare pane citations block */
+.pane-citations {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pane-citations-header {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--bg-elevated);
+}
+
+.pane-citation-item {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pane-citation-file {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.pane-citation-snippet {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-height: 36px;
+  overflow: hidden;
+}
+
+.chat-input-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-canvas);
+  padding-top: 12px;
+  padding-bottom: 4px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.chat-input-bar textarea {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--text-primary);
+  resize: none;
+  outline: none;
+  transition: var(--transition);
+  max-height: 120px;
+  font-family: inherit;
+}
+
+.chat-input-bar textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.15);
+}
+
+.chat-input-bar textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+.btn-send {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  padding: 0;
+}
+
+.btn-send:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.btn-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.send-icon {
+  width: 18px;
+  height: 18px;
+  stroke: #ffffff;
+}
+
+
+/* ==========================================================================
+   12. Citations (Collapsible Panel)
+   ========================================================================== */
+
+.citations-area {
+  margin-top: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.citations-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.citations-header:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.citations-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.citations-title {
+  flex: 1;
+}
+
+.citations-count {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--rag-highlight);
+  color: #fff;
+}
+
+.citations-toggle {
+  font-size: 9px;
+  transition: transform 0.2s ease;
+  color: var(--text-secondary);
+}
+
+.citations-area.expanded .citations-toggle {
+  transform: rotate(90deg);
+}
+
+.citations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 0 14px;
+}
+
+.citations-list.collapsed {
+  max-height: 0;
+}
+
+.citations-area.expanded .citations-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 8px 14px 12px;
+}
+
+.citation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--rag-highlight);
+}
+
+.citation-filename {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.citation-snippet {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 48px;
+  overflow: hidden;
+}
+
+
+/* ==========================================================================
+   13. Toast System
+   ========================================================================== */
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  animation: slideInRight 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  pointer-events: auto;
+  background: var(--bg-surface);
+}
+
+.toast.success {
+  border-left: 3px solid var(--accent-success);
+}
+
+.toast.error {
+  border-left: 3px solid var(--accent-error);
+}
+
+.toast.warning {
+  border-left: 3px solid var(--accent-warning);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.toast-msg {
+  flex: 1;
+}
+
+.toast-out {
+  animation: slideOutRight 0.2s ease-in forwards;
+}
+
+
+/* ==========================================================================
+   14. Spinner
+   ========================================================================== */
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--link-bg-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner.hidden {
+  display: none;
+}
+
+
+/* ==========================================================================
+   15. Loading Skeletons
+   ========================================================================== */
+
+.skeleton {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-card {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-text {
+  height: 14px;
+  width: 80%;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+  width: 50%;
+}
+
+
+/* ==========================================================================
+   16. Animations (Keyframes)
+   ========================================================================== */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background: var(--bg-elevated);
+  }
+  50% {
+    background: var(--border);
+  }
+  100% {
+    background: var(--bg-elevated);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+
+/* ==========================================================================
+   17. Responsive
+   ========================================================================== */
+
+@media (max-width: 959px) {
+  .sidebar {
+    width: 64px;
+  }
+
+  .sidebar-link span {
+    display: none;
+  }
+
+  .logo-text {
+    display: none;
+  }
+
+  .sidebar-logo {
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .compare-container {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-divider {
+    width: 100%;
+    height: 1px;
+  }
+}
+
+@media (max-width: 599px) {
+  .sidebar {
+    display: none;
+  }
+
+  .main-panel {
+    padding: 16px;
+  }
+
+  .document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .message-bubble {
+    max-width: 95%;
+  }
+
+  .mode-tabs {
+    flex-wrap: wrap;
+  }
+
+  .chat-input-bar {
+    padding: 8px;
+  }
+
+  .upload-zone {
+    padding: 24px;
+  }
+
+  .tab-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .tab-header h2 {
+    font-size: 18px;
+  }
+}
+
+
+/* ==========================================================================
+   18. Design System — CSS Custom Properties
+   ========================================================================== */
+
+:root {
+  /* ── Vercel-inspired surface palette ── */
+  --bg-canvas: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f5f5f5;
+  --border: #ebebeb;
+  --border-strong: #d4d4d4;
+
+  /* ── Text ── */
+  --text-primary: #171717;
+  --text-secondary: #4d4d4d;
+  --text-muted: #888888;
+  --text-inverse: #ffffff;
+
+  /* ── Accent / brand ── */
+  --accent: #0070f3;
+  --accent-hover: #0761d1;
+  --accent-success: #0070f3;
+  --accent-warning: #f5a623;
+  --accent-error: #ee0000;
+
+  /* ── Semantic highlights ── */
+  --rag-highlight: #7928ca;
+  --bare-llm: #ff0080;
+
+  /* ── Soft backgrounds ── */
+  --link-bg-soft: #d3e5ff;
+  --error-soft: #f7d4d6;
+  --warning-soft: #ffefcf;
+  --success-soft: #d3e5ff;
+  --violet-soft: #d8ccf1;
+  --cyan: #50e3c2;
+  --cyan-soft: #aaffec;
+
+  /* ── Typography ── */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-feature-settings: "ss01", "ss02";
+
+  /* ── Radius ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill-sm: 64px;
+  --radius-pill: 100px;
+  --radius-full: 9999px;
+
+  /* ── Spacing (4px base) ── */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 40px;
+  --space-3xl: 48px;
+
+  /* ── Layout ── */
+  --sidebar-width: 240px;
+
+  /* ── Vercel Stacked Shadows (light theme) ── */
+  --shadow-sm:  0 0 0 1px rgba(0,0,0,0.08);
+  --shadow-md:  0px 1px 1px rgba(0,0,0,0.02),
+                0px 2px 2px rgba(0,0,0,0.04),
+                0 0 0 1px rgba(0,0,0,0.08);
+  --shadow-lg:  0px 2px 2px rgba(0,0,0,0.04),
+                0px 8px 16px -4px rgba(0,0,0,0.04),
+                0 0 0 1px rgba(0,0,0,0.08);
+
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}

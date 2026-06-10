@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最简 RAG 管道：Embed → Retrieve → Generate</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 1-2</span><span class="sep">›</span><span>最简 RAG 管道</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+
+  <!-- Progress Bar -->
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>4 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="4" data-total="12"></div></div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="lesson-number">第 04 课</div>
+    <h1>最简 RAG 管道：Embed → Retrieve → Generate</h1>
+    <p class="subtitle">不依赖任何向量数据库，用纯 Python 实现完整的 RAG 流程</p>
+  </section>
+
+  <!-- Main Content -->
+  <div class="main-container">
+
+    <!-- Section 1: 目标：从零构建 RAG -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">01</div>
+        <h2>目标：从零构建 RAG</h2>
+      </div>
+      <div class="card-body">
+        <p>在深入了解 ChromaDB 等专业工具之前，我们先用手边最简单的工具——<strong>纯 Python + NumPy + OpenAI API</strong>——构建一个完整但极简的 RAG 管道。整个流程包括：</p>
+
+        <div class="flow-diagram">
+          <div class="flow-node">10 条知识片段</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-node">文本向量化</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-node">内存向量搜索</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-node">LLM 生成回答</div>
+        </div>
+
+        <p>不需要安装 ChromaDB、Milvus 或任何向量数据库——所有向量都存储在 <strong>Python 的 list</strong> 中，搜索就靠 <strong>NumPy 的余弦相似度</strong>。这个"玩具"版本能让你直观理解 RAG 的每一个环节是如何串联的。</p>
+
+        <div class="info-box">
+          <strong>学习目标</strong>
+          理解 RAG 管道的完整数据流，为后续引入 ChromaDB、SSE 流式输出、文档管理等生产级特性打下坚实基础。简单不代表无用——这就是 RAG 的本质骨架。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Step 1: 准备知识库 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">02</div>
+        <h2>Step 1：准备知识库</h2>
+      </div>
+      <div class="card-body">
+        <p>首先准备一个包含 10 条知识片段的小型知识库。这些片段可以来自任何你感兴趣的领域：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code>knowledge_base = [
+    <span class="hl-string">"深度学习是机器学习的一个分支，使用多层神经网络学习数据的层次化表示。"</span>,
+    <span class="hl-string">"反向传播算法由Rumelhart、Hinton等人在1986年提出，利用链式法则计算每一层的梯度。"</span>,
+    <span class="hl-string">"Transformer架构由Vaswani等人在2017年的论文《Attention Is All You Need》中提出，基于自注意力机制。"</span>,
+    <span class="hl-string">"Python是由Guido van Rossum于1991年创建的通用编程语言，以简洁优雅著称。"</span>,
+    <span class="hl-string">"RAG全称Retrieval-Augmented Generation，由Facebook AI Research于2020年提出。"</span>,
+    <span class="hl-string">"卷积神经网络(CNN)特别适合处理图像数据，通过卷积核提取局部特征。"</span>,
+    <span class="hl-string">"GPT系列模型由OpenAI开发，GPT-4是目前最先进的大语言模型之一。"</span>,
+    <span class="hl-string">"向量数据库如ChromaDB专门用于存储和检索高维嵌入向量。"</span>,
+    <span class="hl-string">"自注意力机制允许模型在处理每个词时关注输入序列中的所有其他词。"</span>,
+    <span class="hl-string">"余弦相似度是衡量两个向量方向一致性的常用方法，广泛应用于信息检索。"</span>,
+]</code></pre>
+        </div>
+
+        <p>在实际项目中，这些片段来自 <strong>PDF 文档的分块结果</strong>。但在最简单的版本中，我们直接用手写的知识片段来验证流程。</p>
+      </div>
+    </div>
+
+    <!-- Section 3: Step 2: 文本分块与向量化 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">03</div>
+        <h2>Step 2：文本分块与向量化</h2>
+      </div>
+      <div class="card-body">
+        <p>将知识片段向量化——每条片段转换为一个 1536 维的浮点数向量：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — 向量化知识库</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">from</span> openai <span class="hl-keyword">import</span> OpenAI
+<span class="hl-keyword">import</span> numpy <span class="hl-keyword">as</span> np
+
+client = OpenAI()
+
+<span class="hl-keyword">def</span> <span class="hl-func">embed_texts</span>(texts):
+    <span class="hl-string">"""向量化一批文本"""</span>
+    response = client.embeddings.create(
+        model=<span class="hl-string">"text-embedding-3-small"</span>,
+        input=texts
+    )
+    <span class="hl-keyword">return</span> np.array([item.embedding <span class="hl-keyword">for</span> item <span class="hl-keyword">in</span> response.data])
+
+<span class="hl-comment"># 将整个知识库向量化</span>
+doc_vectors = embed_texts(knowledge_base)
+<span class="hl-keyword">print</span>(<span class="hl-string">f"向量矩阵形状: {doc_vectors.shape}"</span>)  <span class="hl-comment"># (10, 1536)</span></code></pre>
+        </div>
+
+        <p>至此，我们将 10 条文本转换为了一个 <strong>10 × 1536</strong> 的 NumPy 矩阵——每一行是一个知识片段的"语义坐标"。</p>
+      </div>
+    </div>
+
+    <!-- Section 4: Step 3: 检索最相关片段 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">04</div>
+        <h2>Step 3：检索最相关片段</h2>
+      </div>
+      <div class="card-body">
+        <p>当用户提出问题时，将问题向量化，然后在知识库的向量矩阵中找出最相似的 Top-K 个片段：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — 检索函数</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">def</span> <span class="hl-func">retrieve</span>(query, knowledge_base, doc_vectors, k=<span class="hl-number">3</span>):
+    <span class="hl-string">"""
+    检索与查询最相关的 Top-K 个知识片段
+    
+    参数:
+        query:          用户问题 (str)
+        knowledge_base: 原始知识片段列表
+        doc_vectors:    知识片段的向量矩阵 (n, 1536)
+        k:              返回结果数量
+    """</span>
+    <span class="hl-comment"># 1. 向量化用户问题</span>
+    query_vec = embed_texts([query])[<span class="hl-number">0</span>]
+
+    <span class="hl-comment"># 2. 计算余弦相似度</span>
+    norms = np.linalg.norm(doc_vectors, axis=<span class="hl-number">1</span>)
+    query_norm = np.linalg.norm(query_vec)
+    similarities = np.dot(doc_vectors, query_vec) / (norms * query_norm)
+
+    <span class="hl-comment"># 3. 获取 Top-K 索引</span>
+    top_k_indices = np.argsort(similarities)[-k:][::-<span class="hl-number">1</span>]
+
+    <span class="hl-comment"># 4. 返回结果</span>
+    results = []
+    <span class="hl-keyword">for</span> idx <span class="hl-keyword">in</span> top_k_indices:
+        results.append({
+            <span class="hl-string">'content'</span>: knowledge_base[idx],
+            <span class="hl-string">'score'</span>: <span class="hl-builtin">float</span>(similarities[idx])
+        })
+    <span class="hl-keyword">return</span> results
+
+
+<span class="hl-comment"># 测试检索</span>
+query = <span class="hl-string">"谁提出了Transformer架构？"</span>
+results = retrieve(query, knowledge_base, doc_vectors, k=<span class="hl-number">3</span>)
+<span class="hl-keyword">for</span> i, r <span class="hl-keyword">in</span> <span class="hl-builtin">enumerate</span>(results):
+    <span class="hl-keyword">print</span>(<span class="hl-string">f"[{i+1}] 相似度: {r['score']:.4f}"</span>)
+    <span class="hl-keyword">print</span>(<span class="hl-string">f"    内容: {r['content'][:80]}...\n"</span>)</code></pre>
+        </div>
+
+        <p>当用户问"谁提出了 Transformer 架构？"时，第 3 条知识片段（Transformer 相关内容）的相似度会显著高于其他片段。</p>
+      </div>
+    </div>
+
+    <!-- Section 5: Step 4: 构建 Prompt 并调用 LLM -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">05</div>
+        <h2>Step 4：构建 RAG Prompt 并调用 LLM</h2>
+      </div>
+      <div class="card-body">
+        <p>将检索到的片段拼入一个结构化的 Prompt，然后调用 LLM 生成最终答案：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — RAG 生成</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">def</span> <span class="hl-func">rag_generate</span>(query, knowledge_base, doc_vectors, k=<span class="hl-number">3</span>):
+    <span class="hl-string">"""执行完整的 RAG 流程：检索 → 构建 Prompt → 生成回答"""</span>
+
+    <span class="hl-comment"># 1. 检索相关文档片段</span>
+    retrieved = retrieve(query, knowledge_base, doc_vectors, k=k)
+
+    <span class="hl-comment"># 2. 拼接上下文</span>
+    context = <span class="hl-string">"\n---\n"</span>.join(
+        <span class="hl-string">f"[来源{i+1}] {r['content']}"</span>
+        <span class="hl-keyword">for</span> i, r <span class="hl-keyword">in</span> <span class="hl-builtin">enumerate</span>(retrieved)
+    )
+
+    <span class="hl-comment"># 3. 构建完整的 RAG Prompt</span>
+    prompt = <span class="hl-string">f"""你是一个智能助手。请基于以下提供的知识库内容回答用户的问题。
+如果知识库中没有相关信息，请如实告知，不要编造答案。
+
+## 知识库内容
+{context}
+
+## 用户问题
+{query}
+
+## 回答要求
+- 基于知识库内容作答，不要使用知识库之外的信息
+- 在回答中标注信息来源编号，如 [来源1]
+- 如果知识库内容不足以回答问题，请明确说明"""</span>
+
+    <span class="hl-comment"># 4. 调用 LLM 生成回答</span>
+    response = client.chat.completions.create(
+        model=<span class="hl-string">"gpt-4o-mini"</span>,
+        messages=[{<span class="hl-string">"role"</span>: <span class="hl-string">"user"</span>, <span class="hl-string">"content"</span>: prompt}],
+        temperature=<span class="hl-number">0.3</span>,
+    )
+    <span class="hl-keyword">return</span> response.choices[<span class="hl-number">0</span>].message.content
+
+
+<span class="hl-comment"># 完整流程</span>
+answer = rag_generate(<span class="hl-string">"谁提出了Transformer架构？"</span>, knowledge_base, doc_vectors)
+<span class="hl-keyword">print</span>(answer)</code></pre>
+        </div>
+
+        <div class="info-box warning">
+          <strong>Prompt 设计要点</strong>
+          RAG Prompt 需要明确指示 LLM：<strong>基于提供的上下文回答</strong>、<strong>标注引用来源</strong>、<strong>不要编造</strong>。这三条指令是抑制幻觉的关键。缺少任何一条都可能导致模型"抛开知识库、自由发挥"。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 6: 完整可运行代码 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">06</div>
+        <h2>完整可运行代码</h2>
+      </div>
+      <div class="card-body">
+        <p>以下是整合了所有步骤的完整脚本。复制这段代码，设置好 <code>OPENAI_API_KEY</code> 环境变量即可运行：</p>
+
+        <div class="collapsible open">
+          <div class="collapsible-header">
+            <span>📄 完整代码：minimal_rag.py（点击展开/收起）</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="collapsible-body">
+            <div class="code-block" style="margin:0;border-radius:0 0 8px 8px;">
+              <div class="code-header">
+                <span class="code-lang">Python — minimal_rag.py</span>
+                <button class="copy-btn">复制代码</button>
+              </div>
+              <pre><code><span class="hl-string">"""
+最简 RAG 管道示例
+不依赖任何向量数据库，纯 Python + NumPy + OpenAI API
+"""</span>
+<span class="hl-keyword">import</span> os
+<span class="hl-keyword">import</span> numpy <span class="hl-keyword">as</span> np
+<span class="hl-keyword">from</span> openai <span class="hl-keyword">import</span> OpenAI
+
+<span class="hl-comment"># ============================================================
+# 配置
+# ============================================================</span>
+client = OpenAI(api_key=os.getenv(<span class="hl-string">"OPENAI_API_KEY"</span>))
+EMBEDDING_MODEL = <span class="hl-string">"text-embedding-3-small"</span>
+LLM_MODEL = <span class="hl-string">"gpt-4o-mini"</span>
+TOP_K = <span class="hl-number">3</span>
+
+<span class="hl-comment"># ============================================================
+# 知识库（在实际项目中来自 PDF 文件）
+# ============================================================</span>
+knowledge_base = [
+    <span class="hl-string">"深度学习是机器学习的一个分支，使用多层神经网络学习数据的层次化表示。"</span>,
+    <span class="hl-string">"反向传播算法由Rumelhart、Hinton等人在1986年提出，利用链式法则计算每一层的梯度。"</span>,
+    <span class="hl-string">"Transformer架构由Vaswani等人在2017年的论文《Attention Is All You Need》中提出，基于自注意力机制。"</span>,
+    <span class="hl-string">"Python是由Guido van Rossum于1991年创建的通用编程语言，以简洁优雅著称。"</span>,
+    <span class="hl-string">"RAG全称Retrieval-Augmented Generation，由Facebook AI Research于2020年提出。"</span>,
+    <span class="hl-string">"卷积神经网络(CNN)特别适合处理图像数据，通过卷积核提取局部特征。"</span>,
+    <span class="hl-string">"GPT系列模型由OpenAI开发，GPT-4是目前最先进的大语言模型之一。"</span>,
+    <span class="hl-string">"向量数据库如ChromaDB专门用于存储和检索高维嵌入向量。"</span>,
+    <span class="hl-string">"自注意力机制允许模型在处理每个词时关注输入序列中的所有其他词。"</span>,
+    <span class="hl-string">"余弦相似度是衡量两个向量方向一致性的常用方法，广泛应用于信息检索。"</span>,
+]
+
+
+<span class="hl-keyword">def</span> <span class="hl-func">embed_texts</span>(texts):
+    <span class="hl-string">"""向量化文本"""</span>
+    resp = client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
+    <span class="hl-keyword">return</span> np.array([d.embedding <span class="hl-keyword">for</span> d <span class="hl-keyword">in</span> resp.data])
+
+
+<span class="hl-keyword">def</span> <span class="hl-func">retrieve</span>(query, doc_vectors, k=TOP_K):
+    <span class="hl-string">"""检索最相关的 K 个知识片段"""</span>
+    qv = embed_texts([query])[<span class="hl-number">0</span>]
+    norms = np.linalg.norm(doc_vectors, axis=<span class="hl-number">1</span>)
+    sims = np.dot(doc_vectors, qv) / (norms * np.linalg.norm(qv))
+    top_idx = np.argsort(sims)[-k:][::-<span class="hl-number">1</span>]
+    <span class="hl-keyword">return</span> [(knowledge_base[i], <span class="hl-builtin">float</span>(sims[i])) <span class="hl-keyword">for</span> i <span class="hl-keyword">in</span> top_idx]
+
+
+<span class="hl-keyword">def</span> <span class="hl-func">ask_rag</span>(query):
+    <span class="hl-string">"""执行完整的 RAG 问答流程"""</span>
+    retrieved = retrieve(query, doc_vectors)
+    context = <span class="hl-string">"\n---\n"</span>.join(
+        <span class="hl-string">f"[来源{i+1}] {text}"</span> <span class="hl-keyword">for</span> i, (text, _) <span class="hl-keyword">in</span> <span class="hl-builtin">enumerate</span>(retrieved)
+    )
+
+    prompt = <span class="hl-string">f"""基于以下知识库内容回答问题，标注引用来源：
+
+{context}
+
+问题：{query}
+
+请基于以上知识库内容回答。如果知识库不足以回答，请明说。"""</span>
+
+    resp = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{<span class="hl-string">"role"</span>: <span class="hl-string">"user"</span>, <span class="hl-string">"content"</span>: prompt}],
+        temperature=<span class="hl-number">0.3</span>,
+    )
+    <span class="hl-keyword">return</span> resp.choices[<span class="hl-number">0</span>].message.content
+
+
+<span class="hl-comment"># ============================================================
+# 运行演示
+# ============================================================</span>
+<span class="hl-keyword">if</span> __name__ == <span class="hl-string">"__main__"</span>:
+    <span class="hl-keyword">print</span>(<span class="hl-string">"正在向量化知识库..."</span>)
+    doc_vectors = embed_texts(knowledge_base)
+    <span class="hl-keyword">print</span>(<span class="hl-string">f"✓ 知识库向量化完成，矩阵形状: {doc_vectors.shape}\n"</span>)
+
+    questions = [
+        <span class="hl-string">"谁提出了Transformer架构？"</span>,
+        <span class="hl-string">"什么是指反向传播算法？"</span>,
+        <span class="hl-string">"Python是哪一年创建的？"</span>,
+    ]
+
+    <span class="hl-keyword">for</span> q <span class="hl-keyword">in</span> questions:
+        <span class="hl-keyword">print</span>(<span class="hl-string">f"\n{'='*60}"</span>)
+        <span class="hl-keyword">print</span>(<span class="hl-string">f"❓ 问题: {q}"</span>)
+        <span class="hl-keyword">print</span>(<span class="hl-string">f"{'='*60}"</span>)
+        answer = ask_rag(q)
+        <span class="hl-keyword">print</span>(<span class="hl-string">f"🤖 回答:\n{answer}"</span>)</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 7: 对比实验 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">07</div>
+        <h2>对比实验：RAG vs 纯 LLM</h2>
+      </div>
+      <div class="card-body">
+        <p>对同一个问题，分别使用 <strong>RAG 增强模式</strong>和<strong>纯 LLM 模式</strong>进行回答，观察差异：</p>
+
+        <div class="compare-grid">
+          <div class="compare-box rag">
+            <h3>✅ RAG 增强回答</h3>
+            <p style="font-size:0.85rem;line-height:1.7;">
+              <strong>问：反向传播算法是谁提出的？</strong><br><br>
+              "根据您提供的知识库内容，反向传播算法由 <strong>Rumelhart、Hinton 等人于 1986 年提出</strong> [来源2]。该算法利用<strong>链式法则</strong>来计算神经网络中每一层的梯度，是训练深层神经网络的基石。"
+            </p>
+          </div>
+          <div class="compare-box bare">
+            <h3>⚠ 纯 LLM 回答（无 RAG）</h3>
+            <p style="font-size:0.85rem;line-height:1.7;">
+              <strong>问：反向传播算法是谁提出的？</strong><br><br>
+              "反向传播算法的概念可以追溯到 1960 年代。现代形式的反向传播算法主要归功于 David Rumelhart、Geoffrey Hinton 和 Ronald Williams 在 1986 年发表的论文。该算法通过计算损失函数对各层参数的梯度来更新神经网络权重……"
+            </p>
+          </div>
+        </div>
+
+        <div class="info-box success">
+          <strong>关键差异</strong>
+          <p>RAG 回答<strong>明确引用了知识来源</strong>（[来源2]），回答简洁聚焦，紧扣知识库内容。纯 LLM 回答虽然也正确，但引用了知识库之外的额外细节（Ronald Williams 的名字），且无法验证信息来源的准确性。</p>
+        </div>
+
+        <p>这就是 RAG 的核心优势：<strong>可溯源性（Traceability）</strong>与<strong>可控性（Controllability）</strong>——用户可以追溯每条信息的来源，开发者可以通过更新知识库来精确控制 LLM 能"知道"什么。</p>
+      </div>
+    </div>
+
+    <!-- Section 8: 从玩具到项目的演进 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">08</div>
+        <h2>从玩具到项目：演进路线</h2>
+      </div>
+      <div class="card-body">
+        <p>这个"玩具版"RAG 与我们的项目级实现（<code>app/services/rag_pipeline.py</code>）之间存在哪些关键差异？</p>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>玩具版（本课）</th>
+              <th>项目版（后续课程）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>向量存储</td>
+              <td>NumPy 数组（内存）</td>
+              <td><span class="tag tech">ChromaDB</span>（持久化 + 近似搜索）</td>
+            </tr>
+            <tr>
+              <td>计算方式</td>
+              <td>同步（阻塞）</td>
+              <td><span class="tag tech">FastAPI + asyncio</span>（异步并发）</td>
+            </tr>
+            <tr>
+              <td>输出方式</td>
+              <td>一次性返回全部文本</td>
+              <td><span class="tag tech">SSE 流式输出</span>（逐 token 推送）</td>
+            </tr>
+            <tr>
+              <td>文档来源</td>
+              <td>手写知识片段</td>
+              <td><span class="tag tech">PDF 上传</span> → 自动解析分块</td>
+            </tr>
+            <tr>
+              <td>引用格式</td>
+              <td>简单的 [来源N] 标注</td>
+              <td>结构化的 <span class="tag tech">citations</span> 数组（含文档名、页码、片段）</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>虽然项目版更强大，但<strong>核心逻辑完全一致</strong>：向量化 → 检索 → 增强 → 生成。理解了玩具版，你就理解了 RAG 的本质。</p>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 动手练习</h3>
+      <ol>
+        <li>准备 10 篇你感兴趣的领域的知识片段（可以是你专业领域的术语解释），运行完整的 RAG 管道，用你的知识库回答几个专业问题。</li>
+        <li>对同一个问题分别测试 RAG 模式和纯 LLM 模式（去掉知识库上下文），记录回答的差异，特别是事实准确性和来源可追溯性。</li>
+        <li>尝试修改 Prompt 模板（如调整系统指令、修改引用格式、调整温度参数），观察对输出质量的影响。</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">✓</div>
+        <h2>本课小结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>用纯 Python + NumPy + OpenAI 就能构建完整的 RAG 管道，<strong>无需任何向量数据库</strong></li>
+          <li>RAG 管道的四步：<strong>准备知识库 → 向量化 → 检索 Top-K → 构建 Prompt 并调用 LLM</strong></li>
+          <li>检索到的文档片段通过结构化 Prompt 注入上下文，LLM 据此生成可溯源、可验证的回答</li>
+          <li>RAG 回答比纯 LLM 回答更<strong>准确、可信、可追溯</strong>，因为它有明确的知识来源</li>
+          <li>项目版的 <code>rag_pipeline.py</code> 在核心逻辑上与玩具版一致，只是加入了 ChromaDB、异步、SSE 等生产级特性</li>
+          <li>掌握了玩具版，你就掌握了 RAG 的本质——后续课程只是在此基础上不断加砖添瓦</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <a href="03-vector-similarity.html">← 上一篇<br><small>向量相似度检索</small></a>
+      <div class="nav-index">第 4 课 / 共 12 课</div>
+      <a href="05-text-chunking.html">下一篇 →<br><small>文本分块策略</small></a>
+    </div>
+
+  </div>
+
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

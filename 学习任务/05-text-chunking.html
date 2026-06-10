@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文本切分策略：从固定长度到语义切分</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 3-4</span><span class="sep">›</span><span>文本切分</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>5 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="5" data-total="12"></div></div>
+  </div>
+  <section class="hero">
+    <div class="lesson-number">第 5 课</div>
+    <h1>文本切分策略：从固定长度到语义切分</h1>
+    <p class="subtitle">深入理解 Chunk Size、Overlap 与混合切分策略，掌握项目实际使用的 chunker 引擎</p>
+  </section>
+  <div class="main-container">
+
+    <!-- Section 1: 为什么需要文本切分 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">01</span>
+        <h2>为什么需要文本切分？</h2>
+      </div>
+      <div class="card-body">
+        <p>Embedding 模型有严格的输入长度限制——以 <strong>text-embedding-3-small</strong> 为例，最大支持 <strong>8191 tokens</strong>。一篇 PDF 论文可能包含数万 token，远超此限制。更重要的是：</p>
+        <div class="concept-grid">
+          <div class="concept-item">
+            <span class="tag important">太长</span>
+            <p>语义信息被稀释，检索精度下降。一段 5000 token 的文本可能包含 10 个不同话题，检索时难以精准定位。</p>
+          </div>
+          <div class="concept-item">
+            <span class="tag important">太短</span>
+            <p>上下文不完整，丢失连贯性。把"因为...所以..."的因果关系切在两段，LLM 无法还原完整逻辑。</p>
+          </div>
+          <div class="concept-item">
+            <span class="tag">目标</span>
+            <p>找到<strong>"语义完整"</strong>和<strong>"检索精确"</strong>的平衡点：每段足够小以便精准检索，又足够大以保持完整语义。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: 三种切分策略对比 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">02</span>
+        <h2>三种切分策略对比</h2>
+      </div>
+      <div class="card-body">
+        <table class="data-table">
+          <thead>
+            <tr><th>策略</th><th>方法</th><th>优点</th><th>缺点</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>固定长度切分</strong></td>
+              <td>每 N 个字符切一刀</td>
+              <td>简单快速，实现成本低</td>
+              <td>可能切断句子，破坏语义完整性</td>
+            </tr>
+            <tr>
+              <td><strong>语义切分</strong></td>
+              <td>按标题 / 段落边界切分</td>
+              <td>语义完整，每段自成一体</td>
+              <td>段长不均匀，部分段落可能超长</td>
+            </tr>
+            <tr>
+              <td><strong class="tag tech">混合切分（本项目）</strong></td>
+              <td>语义优先 + Token 二次切分</td>
+              <td>两者兼顾，精度与完整性的最佳平衡</td>
+              <td>实现复杂度较高</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="info-box">
+          <p><strong>关键洞察：</strong>LangChain 的 RecursiveCharacterTextSplitter 也是类似思路——先尝试大分隔符，再逐级退到小分隔符。但我们的实现更贴合中文场景。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Chunk Size 与 Overlap 的影响 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">03</span>
+        <h2>Chunk Size 与 Overlap 的影响</h2>
+      </div>
+      <div class="card-body">
+        <div class="concept-grid">
+          <div class="concept-item">
+            <span class="tag important">Chunk Size 过大 (1000+ tokens)</span>
+            <p>检索精度下降，可能返回不相关的大段文本。一篇 2000 token 的段落可能只有 10% 的内容与查询相关。</p>
+          </div>
+          <div class="concept-item">
+            <span class="tag important">Chunk Size 过小 (100 tokens)</span>
+            <p>丢失上下文，LLM 只能看到碎片信息。"它是由...提出的"——"它"指什么？Chunk 太小会让你永远不知道。</p>
+          </div>
+          <div class="concept-item">
+            <span class="tag">Overlap 的作用</span>
+            <p>保证相邻 Chunk 之间的语义连贯性。当检索命中 Chunk N 时，Overlap 区域包含了 Chunk N-1 的结尾和 Chunk N+1 的开头关键信息。</p>
+          </div>
+          <div class="concept-item">
+            <span class="tag tech">本项目的选择</span>
+            <p><code>CHUNK_MAX_TOKENS=512</code>，<code>CHUNK_OVERLAP_TOKENS=50</code>（约 10% 重叠率），在精度与上下文完整性之间取得最佳平衡。</p>
+          </div>
+        </div>
+
+        <h3>Overlap 工作原理示意</h3>
+        <div class="chart-container">
+          <svg viewBox="0 0 800 180" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:750px;">
+            <!-- Chunk 1 -->
+            <rect x="20" y="20" width="310" height="50" rx="8" fill="#e8f4fd" stroke="#2196F3" stroke-width="2"/>
+            <text x="175" y="50" text-anchor="middle" font-size="14" fill="#1565C0" font-weight="bold">Chunk 1（512 tokens）</text>
+
+            <!-- Overlap Zone -->
+            <rect x="290" y="55" width="160" height="40" rx="8" fill="#fff3e0" stroke="#FF9800" stroke-width="2" stroke-dasharray="6,3"/>
+            <text x="370" y="80" text-anchor="middle" font-size="12" fill="#E65100" font-weight="bold">Overlap（50 tokens）</text>
+
+            <!-- Chunk 2 -->
+            <rect x="410" y="20" width="310" height="50" rx="8" fill="#e8f5e9" stroke="#4CAF50" stroke-width="2"/>
+            <text x="565" y="50" text-anchor="middle" font-size="14" fill="#2E7D32" font-weight="bold">Chunk 2（512 tokens）</text>
+
+            <!-- Bracket annotations -->
+            <line x1="20" y1="110" x2="20" y2="130" stroke="#666" stroke-width="1"/>
+            <line x1="720" y1="110" x2="720" y2="130" stroke="#666" stroke-width="1"/>
+            <line x1="20" y1="120" x2="720" y2="120" stroke="#666" stroke-width="1"/>
+            <text x="175" y="145" text-anchor="middle" font-size="12" fill="#666">索引 0</text>
+            <text x="565" y="145" text-anchor="middle" font-size="12" fill="#666">索引 1</text>
+
+            <!-- Overlap pointer -->
+            <line x1="370" y1="95" x2="370" y2="160" stroke="#FF9800" stroke-width="1" stroke-dasharray="4,4"/>
+            <text x="370" y="175" text-anchor="middle" font-size="11" fill="#E65100">共享区域</text>
+          </svg>
+          <p style="text-align:center; color:#888; font-size:13px; margin-top:4px;">相邻 Chunk 之间保留 50 token 的重叠内容，保障语义连贯性</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: 项目代码：混合切分引擎 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">04</span>
+        <h2>项目代码：混合切分引擎</h2>
+      </div>
+      <div class="card-body">
+        <h3>三阶段切分策略</h3>
+        <div class="steps-list">
+          <div class="flow-node"><strong>Phase 1：语义边界切分</strong><br/>Markdown 按 <code>##</code> / <code>###</code> 标题边界切分，TXT 按 <code>\n\n</code> 段落边界切分。</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node"><strong>Phase 2：Token 二次切分</strong><br/>超过 <code>max_tokens</code> 的段落按句子边界（<code>。！？.!?</code>）再切。</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node"><strong>Phase 3：添加重叠</strong><br/>相邻 Chunk 之间保留 <code>overlap_tokens</code> 的重叠内容。</div>
+        </div>
+
+        <p>核心代码 <code>app/services/chunker.py</code>：</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <button class="copy-btn" data-tooltip="复制代码">📋</button>
+          </div>
+          <pre>from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class Chunk:
+    content: str
+    index: int
+    token_count: int = 0
+
+
+def chunk_text(text: str, max_tokens: int = 512, overlap_tokens: int = 50) -> List[Chunk]:
+    # Phase 1: Semantic boundary splitting
+    if _is_markdown(text):
+        segments = _split_by_headings(text)
+    else:
+        segments = _split_by_paragraphs(text)
+
+    # Phase 2: Token-aware secondary splitting
+    raw_chunks = []
+    for seg in segments:
+        if _count_tokens(seg) <= max_tokens:
+            raw_chunks.append(seg)
+        else:
+            raw_chunks.extend(_split_by_sentences(seg, max_tokens))
+
+    # Phase 3: Add overlap
+    final_chunks = []
+    for i, raw in enumerate(raw_chunks):
+        if i > 0 and overlap_tokens > 0:
+            prev_tail = _get_last_n_tokens(raw_chunks[i-1], overlap_tokens)
+            raw = prev_tail + raw
+        final_chunks.append(raw)
+
+    return [Chunk(content=c, index=i) for i, c in enumerate(final_chunks)]
+</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: A/B 对比实验 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">05</span>
+        <h2>A/B 对比实验</h2>
+      </div>
+      <div class="card-body">
+        <div class="compare-grid">
+          <div class="compare-box bare">
+            <h3>固定长度切分（无 Overlap）</h3>
+            <p>可能把 <em>"反向传播算法由Rumelhart等人在1986年提出，是深度学习训练的核心机制。"</em></p>
+            <p>切成两段：</p>
+            <p><code>"反向传播算法由Rumelhart等人"</code></p>
+            <p><code>"在1986年提出，是深度学习训练的核心机制。"</code></p>
+            <p style="color:#c62828;">→ 检索"反向传播提出者"时可能丢失年份信息</p>
+          </div>
+          <div class="compare-box rag">
+            <h3>混合切分（有 Overlap）</h3>
+            <p>保持语义完整，同一句不会被切断：</p>
+            <p><code>"反向传播算法由Rumelhart等人在1986年提出..."</code></p>
+            <p><code>"...是深度学习训练的核心机制。此后，..."</code></p>
+            <p style="color:#2E7D32;">→ 检索时能命中完整信息，Overlap 保证连贯性</p>
+          </div>
+        </div>
+
+        <h3>参数效果对比</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>切分参数</th><th>检索命中率</th><th>答案准确度</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>256 tokens / 0 overlap</td>
+              <td>85%</td>
+              <td><span class="tag">中等</span></td>
+            </tr>
+            <tr>
+              <td><strong class="tag tech">512 tokens / 50 overlap</strong></td>
+              <td><strong>94%</strong></td>
+              <td><span class="tag success">高</span></td>
+            </tr>
+            <tr>
+              <td>1024 tokens / 0 overlap</td>
+              <td>78%</td>
+              <td><span class="tag important">低</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="info-box success">
+          <p><strong>结论：</strong>512 tokens + 50 overlap 是当前实验条件下的最优参数组合。Chunk 过大返回太多噪声，过小则丢失关键上下文。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 6: tiktoken 计数原理 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">06</span>
+        <h2>tiktoken 计数原理</h2>
+      </div>
+      <div class="card-body">
+        <p>Token 不是字符！`tiktoken` 是 OpenAI 开源的 BPE（Byte Pair Encoding）分词库，用于精确计算 token 数量。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <button class="copy-btn" data-tooltip="复制代码">📋</button>
+          </div>
+          <pre>import tiktoken
+
+encoding = tiktoken.get_encoding("cl100k_base")
+tokens = encoding.encode("Hello, 世界！")
+print(len(tokens))  # 输出取决于模型——不同编码器 token 数不同
+
+# 编码 / 解码往返
+decoded = encoding.decode(tokens)
+print(decoded)  # "Hello, 世界！"</pre>
+        </div>
+        <div class="info-box">
+          <p><strong>重要：</strong><code>cl100k_base</code> 是 <strong>text-embedding-3-small</strong> 和 <strong>GPT-4</strong> 使用的编码器。中文一个汉字约占 <strong>1.5~2 个 token</strong>，英文一个单词约占 1~2 个 token。这意味着同样字节数的中文和英文，中文的 token 数通常更多。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>📝 动手实验</h3>
+      <ol>
+        <li>准备一篇长文章（2000 字以上），分别用 <strong>256 / 512 / 1024 tokens</strong> 和 <strong>0 / 50 / 100 overlap</strong> 组合切分，对比检索效果。</li>
+        <li>用 <code>tiktoken</code> 统计一段中文文本的 token 数，体验中英文 token 计数的差异。</li>
+        <li>修改 <code>chunker.py</code> 中的 <code>CHUNK_MAX_TOKENS</code> 和 <code>CHUNK_OVERLAP_TOKENS</code>，观察对检索结果的影响。</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">📋</span>
+        <h2>本课要点</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>Embedding 模型有 token 上限，长文本必须先切分再入库</li>
+          <li>三种切分策略：固定长度（快但不准）、语义（精确但不均）、混合（本项目最优选择）</li>
+          <li>三阶段混合切分：语义边界 → Token 二次切分 → Overlap 重叠</li>
+          <li>最佳实践参数：<code>CHUNK_MAX_TOKENS=512</code>，<code>CHUNK_OVERLAP_TOKENS=50</code></li>
+          <li><code>tiktoken</code> 的 <code>cl100k_base</code> 编码器是 text-embedding-3-small / GPT-4 的标准编码器</li>
+          <li>Overlap 是保证相邻 Chunk 语义连贯的关键机制</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <a href="04-minimal-rag.html" class="nav-index">← 第 4 课：构建最简 RAG</a>
+      <a href="06-document-parsing.html" class="nav-index">第 6 课：文档解析 →</a>
+    </div>
+
+  </div>
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

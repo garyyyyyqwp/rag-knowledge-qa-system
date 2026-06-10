@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>向量相似度检索：余弦相似度与 Top-K</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 1-2</span><span class="sep">›</span><span>向量相似度检索</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+
+  <!-- Progress Bar -->
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>3 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="3" data-total="12"></div></div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="lesson-number">第 03 课</div>
+    <h1>向量相似度检索：余弦相似度与 Top-K</h1>
+    <p class="subtitle">掌握余弦相似度的数学原理与 NumPy 实现，理解 Top-K 检索策略</p>
+  </section>
+
+  <!-- Main Content -->
+  <div class="main-container">
+
+    <!-- Section 1: 为什么需要相似度计算？ -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">01</div>
+        <h2>为什么需要相似度计算？</h2>
+      </div>
+      <div class="card-body">
+        <p>将文本向量化以后，"找到与用户问题最相关的文档"这个任务就变成了一个<strong>向量空间中的最近邻搜索</strong>问题。我们需要一种方法来度量两个向量之间的"距离"或"相似度"。</p>
+
+        <p>常见的有三种度量方式：</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>余弦相似度（Cosine Similarity）</h3>
+            <p>衡量两个向量<strong>方向</strong>的一致性。取值范围 [-1, 1]，1 表示完全相同方向，0 表示正交，-1 表示完全相反。</p>
+            <p style="color:#616161;font-size:0.8rem;margin-top:8px;">在文本检索中最常用——我们关心的是语义方向，而非文本长度。</p>
+          </div>
+          <div class="concept-item">
+            <h3>欧氏距离（Euclidean Distance）</h3>
+            <p>衡量两个向量在空间中<strong>直线距离</strong>。距离越小越相似。受向量长度影响较大，不适合直接用于文本相似度。</p>
+            <p style="color:#616161;font-size:0.8rem;margin-top:8px;">公式：d(A,B) = √[Σ(aᵢ - bᵢ)²]</p>
+          </div>
+          <div class="concept-item">
+            <h3>点积（Dot Product）</h3>
+            <p>两个向量对应分量相乘再求和。与余弦相似度密切相关，当向量归一化后，点积等于余弦相似度。</p>
+            <p style="color:#616161;font-size:0.8rem;margin-top:8px;">公式：A·B = Σ(aᵢ × bᵢ)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: 余弦相似度详解 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">02</div>
+        <h2>余弦相似度详解</h2>
+      </div>
+      <div class="card-body">
+        <p>余弦相似度是 <strong>RAG 系统中最重要的数学工具</strong>。它的公式如下：</p>
+
+        <div class="chart-container">
+          <svg viewBox="0 0 600 100" xmlns="http://www.w3.org/2000/svg">
+            <text x="300" y="45" text-anchor="middle" fill="#1a237e" font-size="22" font-weight="700" font-family="serif" font-style="italic">cos(θ) = (A · B) / (||A|| × ||B||)</text>
+            <text x="300" y="70" text-anchor="middle" fill="#616161" font-size="13">分子：两个向量的点积（对应分量相乘再求和）</text>
+            <text x="300" y="90" text-anchor="middle" fill="#616161" font-size="13">分母：两个向量的模长（L2 范数）之积</text>
+          </svg>
+        </div>
+
+        <p><strong>取值范围解读：</strong></p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>余弦值</th>
+              <th>含义</th>
+              <th>示例（近似）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1.00</td>
+              <td>两个向量指向<strong>完全相同的方向</strong></td>
+              <td>"猫" vs "猫"（完全相同文本）</td>
+            </tr>
+            <tr>
+              <td>0.85 ~ 0.95</td>
+              <td>语义<strong>高度相近</strong></td>
+              <td>"今天天气很好" vs "今日气候宜人"</td>
+            </tr>
+            <tr>
+              <td>0.50 ~ 0.70</td>
+              <td>有一定关联但并非高度相似</td>
+              <td>"机器学习" vs "深度学习"</td>
+            </tr>
+            <tr>
+              <td>0.00 ~ 0.15</td>
+              <td>几乎<strong>没有语义关联</strong></td>
+              <td>"今天天气很好" vs "我喜欢吃苹果"</td>
+            </tr>
+            <tr>
+              <td>-1.00</td>
+              <td>语义<strong>完全相反</strong>（在文本 Embedding 中极少出现）</td>
+              <td>仅在理论上存在</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="info-box">
+          <strong>为什么用余弦相似度而非欧氏距离？</strong>
+          余弦相似度关注的是<strong>方向</strong>而非绝对大小。一篇 1000 字的文章和一篇 100 字的摘要即使长度差异巨大，只要讨论的主题相同，它们的向量方向也应接近。欧氏距离会被长度差异误导，而余弦相似度不会。
+        </div>
+
+        <p>NumPy 实现（三行代码）：</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — NumPy 实现余弦相似度</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">import</span> numpy <span class="hl-keyword">as</span> np
+
+
+<span class="hl-keyword">def</span> <span class="hl-func">cosine_similarity</span>(a: np.ndarray, b: np.ndarray) -> <span class="hl-builtin">float</span>:
+    <span class="hl-string">"""计算两个向量的余弦相似度"""</span>
+    <span class="hl-keyword">return</span> np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+<span class="hl-comment"># 示例</span>
+a = np.array([<span class="hl-number">1</span>, <span class="hl-number">2</span>, <span class="hl-number">3</span>])
+b = np.array([<span class="hl-number">2</span>, <span class="hl-number">4</span>, <span class="hl-number">6</span>])  <span class="hl-comment"># b 与 a 方向相同，只是更长</span>
+<span class="hl-keyword">print</span>(cosine_similarity(a, b))  <span class="hl-comment"># 输出 1.0 —— 方向完全相同！</span>
+
+c = np.array([<span class="hl-number">1</span>, <span class="hl-number">0</span>, <span class="hl-number">0</span>])
+d = np.array([<span class="hl-number">0</span>, <span class="hl-number">1</span>, <span class="hl-number">0</span>])  <span class="hl-comment"># b 与 a 正交</span>
+<span class="hl-keyword">print</span>(cosine_similarity(c, d))  <span class="hl-comment"># 输出 0.0 —— 正交，完全无关</span></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: 动手实验：句子相似度对比 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">03</div>
+        <h2>动手实验：句子相似度矩阵</h2>
+      </div>
+      <div class="card-body">
+        <p>以下是使用 <code>text-embedding-3-small</code> 对三句话进行向量化后计算的相似度矩阵（实际数据）：</p>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>今天天气很好</th>
+              <th>今日气候宜人</th>
+              <th>我喜欢吃苹果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>今天天气很好</strong></td>
+              <td style="background:#c8e6c9;font-weight:700;">1.00</td>
+              <td style="background:#dcedc8;">0.92</td>
+              <td style="background:#ffcdd2;">0.15</td>
+            </tr>
+            <tr>
+              <td><strong>今日气候宜人</strong></td>
+              <td style="background:#dcedc8;">0.92</td>
+              <td style="background:#c8e6c9;font-weight:700;">1.00</td>
+              <td style="background:#ffcdd2;">0.12</td>
+            </tr>
+            <tr>
+              <td><strong>我喜欢吃苹果</strong></td>
+              <td style="background:#ffcdd2;">0.15</td>
+              <td style="background:#ffcdd2;">0.12</td>
+              <td style="background:#c8e6c9;font-weight:700;">1.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="info-box success">
+          <strong>结论</strong>
+          语义相近的句子（"今天天气很好" vs "今日气候宜人"）相似度接近 <strong>0.92</strong>；而语义无关的句子（"今天天气很好" vs "我喜欢吃苹果"）相似度仅 <strong>0.15</strong>。这种巨大的差异正是 RAG 能够精准检索文件的理论基础——相关文档会自动"浮到上面"，不相关的文档会被自然过滤。
+        </div>
+
+        <!-- Heatmap SVG -->
+        <div class="chart-container">
+          <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+            <text x="200" y="22" text-anchor="middle" fill="#1a237e" font-size="13" font-weight="600">相似度矩阵可视化</text>
+
+            <!-- Grid cells -->
+            <rect x="80" y="40" width="100" height="60" rx="4" fill="#2e7d32" opacity="0.9"/>
+            <rect x="185" y="40" width="100" height="60" rx="4" fill="#66bb6a" opacity="0.85"/>
+            <rect x="290" y="40" width="100" height="60" rx="4" fill="#ffcdd2" opacity="0.8"/>
+
+            <rect x="80" y="105" width="100" height="60" rx="4" fill="#66bb6a" opacity="0.85"/>
+            <rect x="185" y="105" width="100" height="60" rx="4" fill="#2e7d32" opacity="0.9"/>
+            <rect x="290" y="105" width="100" height="60" rx="4" fill="#ffcdd2" opacity="0.8"/>
+
+            <rect x="80" y="170" width="100" height="60" rx="4" fill="#ffcdd2" opacity="0.8"/>
+            <rect x="185" y="170" width="100" height="60" rx="4" fill="#ffcdd2" opacity="0.8"/>
+            <rect x="290" y="170" width="100" height="60" rx="4" fill="#2e7d32" opacity="0.9"/>
+
+            <!-- Labels -->
+            <text x="130" y="75" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">1.00</text>
+            <text x="235" y="75" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">0.92</text>
+            <text x="340" y="75" text-anchor="middle" fill="#c62828" font-size="13" font-weight="600">0.15</text>
+
+            <text x="130" y="140" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">0.92</text>
+            <text x="235" y="140" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">1.00</text>
+            <text x="340" y="140" text-anchor="middle" fill="#c62828" font-size="13" font-weight="600">0.12</text>
+
+            <text x="130" y="205" text-anchor="middle" fill="#c62828" font-size="13" font-weight="600">0.15</text>
+            <text x="235" y="205" text-anchor="middle" fill="#c62828" font-size="13" font-weight="600">0.12</text>
+            <text x="340" y="205" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">1.00</text>
+
+            <!-- Row labels -->
+            <text x="75" y="75" text-anchor="end" fill="#616161" font-size="10">天气很好</text>
+            <text x="75" y="140" text-anchor="end" fill="#616161" font-size="10">气候宜人</text>
+            <text x="75" y="205" text-anchor="end" fill="#616161" font-size="10">吃苹果</text>
+
+            <!-- Legend -->
+            <rect x="80" y="242" width="14" height="14" rx="2" fill="#2e7d32" opacity="0.9"/>
+            <text x="98" y="254" fill="#616161" font-size="9">高相似度</text>
+            <rect x="160" y="242" width="14" height="14" rx="2" fill="#66bb6a" opacity="0.85"/>
+            <text x="178" y="254" fill="#616161" font-size="9">中高</text>
+            <rect x="220" y="242" width="14" height="14" rx="2" fill="#ffcdd2" opacity="0.8"/>
+            <text x="238" y="254" fill="#616161" font-size="9">低相似度</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Top-K 检索策略 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">04</div>
+        <h2>Top-K 检索策略</h2>
+      </div>
+      <div class="card-body">
+        <p>向量检索不是只返回 <strong>1 个</strong>最相关的结果，而是返回<strong>最相似的 K 个</strong>。K 的选择是一个重要的权衡：</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>K = 1（单一结果）</h3>
+            <p><strong>最精确</strong>但<strong>可能遗漏</strong>。如果第一个结果因为分块不当等问题恰好不包含完整答案，系统将无法回答。适合一些简单的精准匹配场景。</p>
+            <p style="color:#c62828;font-size:0.8rem;margin-top:8px;">⚠ 不推荐：对复杂问题鲁棒性不足</p>
+          </div>
+          <div class="concept-item">
+            <h3>K = 5（本项目默认值）</h3>
+            <p><strong>平衡精度与噪音</strong>的黄金选择。5 个 Chunk 通常能覆盖答案所需的多角度信息，又不会超出 LLM 的上下文窗口。</p>
+            <p style="color:#2e7d32;font-size:0.8rem;margin-top:8px;">✅ 推荐：大多数 RAG 场景的最佳实践</p>
+          </div>
+          <div class="concept-item">
+            <h3>K = 10（更多结果）</h3>
+            <p><strong>更全面</strong>但可能<strong>引入噪音</strong>。更多的 Chunk 可能包含不相关内容，稀释关键信息，增加 token 消耗和延迟。</p>
+            <p style="color:#f57f17;font-size:0.8rem;margin-top:8px;">⚠ 慎用：仅在确认检索质量高时增大 K</p>
+          </div>
+        </div>
+
+        <p>完整实现：</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — Top-K 检索函数</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">import</span> numpy <span class="hl-keyword">as</span> np
+
+
+<span class="hl-keyword">def</span> <span class="hl-func">top_k_search</span>(query_vec, doc_vecs, docs, k=<span class="hl-number">5</span>):
+    <span class="hl-string">"""
+    在文档向量中搜索与查询向量最相似的 Top-K 个文档
+    
+    参数:
+        query_vec: 查询向量 (list[float])
+        doc_vecs:  文档向量列表 (list[list[float]])
+        docs:      原始文档列表 (list[str])
+        k:         返回结果数量
+    
+    返回:
+        [(文档内容, 相似度分数), ...]  按相似度从高到低排序
+    """</span>
+    similarities = [
+        np.dot(query_vec, dv) / (np.linalg.norm(query_vec) * np.linalg.norm(dv))
+        <span class="hl-keyword">for</span> dv <span class="hl-keyword">in</span> doc_vecs
+    ]
+    <span class="hl-comment"># 获取相似度最高的 k 个索引（从高到低）</span>
+    top_indices = np.argsort(similarities)[-k:][::-<span class="hl-number">1</span>]
+    <span class="hl-keyword">return</span> [(docs[i], <span class="hl-builtin">float</span>(similarities[i])) <span class="hl-keyword">for</span> i <span class="hl-keyword">in</span> top_indices]</code></pre>
+        </div>
+
+        <div class="info-box">
+          <strong>项目中的配置</strong>
+          在 <code>app/utils/config.py</code> 中，<code>RAG_TOP_K = 5</code> 定义了默认检索数量。你可以根据实际问题类型动态调整：事实型问题用较小的 K（3~5），分析型问题用较大的 K（7~10）。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: ChromaDB 中的相似度 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">05</div>
+        <h2>ChromaDB 中的相似度计算</h2>
+      </div>
+      <div class="card-body">
+        <p>在实际项目中，我们不会手动用 NumPy 计算相似度——<strong>ChromaDB</strong> 内置了高效的向量检索能力。但理解其底层原理对于调试和优化至关重要：</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>ChromaDB 使用余弦距离</h3>
+            <p>ChromaDB Collection 的 metadata 中设置 <code>hnsw:space: cosine</code>，意味着它使用<strong>余弦距离</strong>作为相似度度量。</p>
+            <p style="color:#616161;font-size:0.8rem;margin-top:8px;">余弦距离 = 1 - 余弦相似度<br>距离越小 → 相似度越高</p>
+          </div>
+          <div class="concept-item">
+            <h3>项目中转换为相似度分数</h3>
+            <p>ChromDB 查询返回的是 <strong>distance</strong>。我们的项目将其转换回直观的<strong>相似度分数</strong>：</p>
+            <p style="color:#616161;font-size:0.8rem;margin-top:8px;"><code>score = 1.0 - distance</code><br>分数越接近 1.0 → 越相关</p>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — ChromaDB 检索示例</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-comment"># ChromaDB 查询返回包含 distance 的结果</span>
+results = collection.query(
+    query_embeddings=[query_vector],
+    n_results=<span class="hl-number">5</span>,          <span class="hl-comment"># Top-K = 5</span>
+    include=[<span class="hl-string">'documents'</span>, <span class="hl-string">'distances'</span>, <span class="hl-string">'metadatas'</span>]
+)
+
+<span class="hl-comment"># 将 distance 转换为可读的相似度分数</span>
+<span class="hl-keyword">for</span> doc, dist <span class="hl-keyword">in</span> <span class="hl-builtin">zip</span>(results[<span class="hl-string">'documents'</span>][<span class="hl-number">0</span>], results[<span class="hl-string">'distances'</span>][<span class="hl-number">0</span>]):
+    score = <span class="hl-number">1.0</span> - dist
+    <span class="hl-keyword">print</span>(<span class="hl-string">f"相似度: {score:.4f} | 内容: {doc[:80]}..."</span>)</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 动手练习</h3>
+      <ol>
+        <li>用 NumPy 分别实现余弦相似度和欧氏距离函数，对同一组向量计算两种度量，比较结果的差异。</li>
+        <li>对 5 组句子计算两两之间的余弦相似度，用 Python 的 <code>matplotlib</code> 或简单的表格绘制相似度热力图。</li>
+        <li>尝试不同的 K 值（1, 3, 5, 10），观察检索结果的数量和质量变化。思考：什么样的场景适合什么样的 K？</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">✓</div>
+        <h2>本课小结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>向量相似度计算是 RAG 检索的<strong>数学核心</strong>，用于在向量空间中找到与查询最接近的文档</li>
+          <li><strong>余弦相似度</strong>是最常用的度量：<code>cos(θ) = (A·B) / (||A|| × ||B||)</code>，取值范围 [-1, 1]</li>
+          <li>语义相近的文本相似度可达 0.9+，语义无关的文本接近 0——差距非常明显</li>
+          <li><strong>Top-K</strong> 策略决定检索返回的结果数量：K=5 是平衡精度与噪音的推荐默认值</li>
+          <li>ChromaDB 使用余弦距离（1 - 相似度），项目中将其转换为直观的相似度分数</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <a href="02-embeddings.html">← 上一篇<br><small>Embedding 与向量化</small></a>
+      <div class="nav-index">第 3 课 / 共 12 课</div>
+      <a href="04-minimal-rag.html">下一篇 →<br><small>最简 RAG 管道</small></a>
+    </div>
+
+  </div>
+
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

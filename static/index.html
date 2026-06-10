@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge QA — 个人知识库智能问答系统</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14'>📚</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">📚</div>
+        <div class="logo-text">
+          <span class="logo-title">Knowledge QA</span>
+          <span class="logo-subtitle">个人知识库问答</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="sidebar-link active" data-tab="documents">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Documents</span>
+        </button>
+        <button class="sidebar-link" data-tab="qa">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Q&A Chat</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="footer-text">FastAPI + ChromaDB + RAG</span>
+        <span class="footer-sub">Week 2 Project • 2026</span>
+      </div>
+    </aside>
+
+    <!-- ========== MAIN PANEL ========== -->
+    <main class="main-panel">
+
+      <!-- ===== DOCUMENTS TAB ===== -->
+      <section class="tab-content active" id="tab-documents">
+        <header class="tab-header">
+          <h2>Document Library</h2>
+          <span class="doc-count" id="docCount">0 documents</span>
+        </header>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-icon">📤</div>
+          <p class="upload-title">Drag &amp; drop files here, or click to browse</p>
+          <p class="upload-hint">Supported: PDF &bull; Word &bull; Markdown &bull; TXT &bull; Max 10MB</p>
+          <input type="file" id="fileInput" accept=".pdf,.docx,.md,.txt" hidden>
+          <div class="upload-progress hidden" id="uploadProgress">
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <span class="progress-text" id="progressText">Uploading...</span>
+          </div>
+        </div>
+
+        <!-- Document Grid -->
+        <div class="document-grid" id="documentGrid"></div>
+        <div class="empty-state" id="documentsEmpty">
+          <span class="empty-icon">📭</span>
+          <span class="empty-title">No documents yet</span>
+          <span class="empty-hint">Upload your first document above to build your knowledge base</span>
+        </div>
+      </section>
+
+      <!-- ===== QA CHAT TAB ===== -->
+      <section class="tab-content" id="tab-qa">
+        <header class="tab-header qa-header">
+          <h2>Q&A Chat</h2>
+          <!-- Mode Tabs -->
+          <div class="mode-tabs" id="modeTabs">
+            <button class="mode-btn active" data-mode="rag">
+              <span class="mode-dot rag-dot"></span> RAG
+            </button>
+            <button class="mode-btn" data-mode="bare">
+              <span class="mode-dot bare-dot"></span> LLM Only
+            </button>
+            <button class="mode-btn" data-mode="compare">
+              <span class="mode-dot rag-dot"></span><span class="mode-dot bare-dot"></span> Compare
+            </button>
+          </div>
+        </header>
+
+        <!-- Chat Messages -->
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-empty" id="chatEmpty">
+            <div class="empty-state">
+              <span class="empty-icon">🤖</span>
+              <span class="empty-title">Ask a question about your knowledge base</span>
+              <span class="empty-hint">Upload documents first, then ask anything</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compare Split View (hidden by default) -->
+        <div class="compare-container hidden" id="compareQaContainer">
+          <div class="compare-pane rag-pane" id="qaRagPane">
+            <div class="pane-header">
+              <span class="mode-dot rag-dot"></span> RAG Answer
+              <span class="pane-badge">with knowledge base</span>
+            </div>
+            <div class="pane-content" id="qaRagContent">
+              <div class="pane-empty">RAG response will stream here</div>
+            </div>
+          </div>
+          <div class="compare-divider"></div>
+          <div class="compare-pane bare-pane" id="qaBarePane">
+            <div class="pane-header">
+              <span class="mode-dot bare-dot"></span> LLM Only
+              <span class="pane-badge">no retrieval</span>
+            </div>
+            <div class="pane-content" id="qaBareContent">
+              <div class="pane-empty">Bare LLM response will stream here</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Citations area (collapsible) -->
+        <div class="citations-area hidden" id="citationsArea">
+          <div class="citations-header" id="citationsHeader" role="button" tabindex="0" aria-expanded="false" aria-controls="citationsList">
+            <span class="citations-icon">📖</span>
+            <span class="citations-title">Sources</span>
+            <span class="citations-count" id="citationsCount"></span>
+            <span class="citations-toggle">▶</span>
+          </div>
+          <div class="citations-list collapsed" id="citationsList"></div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="chat-input-bar">
+          <textarea
+            id="questionInput"
+            placeholder="Ask a question about your documents..."
+            rows="1"
+            maxlength="5000"
+          ></textarea>
+          <button class="btn-send" id="btnSendQa" disabled>
+            <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            <span class="spinner hidden" id="qaSpinner"></span>
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

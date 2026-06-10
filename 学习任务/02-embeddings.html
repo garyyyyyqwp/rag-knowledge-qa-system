@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embedding 与向量化：文本到向量的魔法</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 1-2</span><span class="sep">›</span><span>Embedding 与向量化</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+
+  <!-- Progress Bar -->
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>2 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="2" data-total="12"></div></div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="lesson-number">第 02 课</div>
+    <h1>Embedding 与向量化：文本到向量的魔法</h1>
+    <p class="subtitle">理解 Embedding 的核心概念，掌握 OpenAI Embedding API 的调用方法</p>
+  </section>
+
+  <!-- Main Content -->
+  <div class="main-container">
+
+    <!-- Section 1: 什么是 Embedding？ -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">01</div>
+        <h2>什么是 Embedding？</h2>
+      </div>
+      <div class="card-body">
+        <p>Embedding（嵌入）是将<strong>文本转换为固定长度的浮点数向量</strong>的过程。这个向量是文本在<strong>高维语义空间</strong>中的坐标表示。核心规律是：<strong>语义相近的文本，其向量的向量距离也更近</strong>。</p>
+
+        <p>举个例子：假设我们用 1536 维向量表示一句话，"今天天气很好"和"今日气候宜人"的向量会非常接近，而它们与"我喜欢吃苹果"的向量距离则很远。</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>词嵌入（Word Embedding）</h3>
+            <p>将<strong>单个词语</strong>映射为一个稠密向量。经典模型如 Word2Vec、GloVe。词嵌入能捕捉词与词之间的关系，经典的例子是：<code>king - man + woman ≈ queen</code>。</p>
+          </div>
+          <div class="concept-item">
+            <h3>句嵌入（Sentence Embedding）</h3>
+            <p>将<strong>整个句子或段落</strong>映射为一个向量。本项目使用的 OpenAI Embedding API 即属于此类。它整合了整段文本的语义信息，而非对每个词分别编码。</p>
+          </div>
+        </div>
+
+        <div class="info-box">
+          <strong>关键数据</strong>
+          <code>text-embedding-3-small</code> 输出 1536 维向量，<code>text-embedding-3-large</code> 输出 3072 维向量。<span data-tooltip="维度越高，语义表达能力越强，但存储和计算成本也越高">维度越高，表达能力越强，但成本也越高。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Embedding API 调用实战 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">02</div>
+        <h2>Embedding API 调用实战</h2>
+      </div>
+      <div class="card-body">
+        <p>使用 OpenAI 的 Embedding API 非常简单，只需几行代码：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — 基础调用</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">from</span> openai <span class="hl-keyword">import</span> OpenAI
+
+client = OpenAI()
+response = client.embeddings.create(
+    model=<span class="hl-string">"text-embedding-3-small"</span>,
+    input=[<span class="hl-string">"今天天气很好"</span>, <span class="hl-string">"今日气候宜人"</span>, <span class="hl-string">"我喜欢吃苹果"</span>]
+)
+vectors = [item.embedding <span class="hl-keyword">for</span> item <span class="hl-keyword">in</span> response.data]
+
+<span class="hl-comment"># 验证: vectors[0] 与 vectors[1] 的余弦相似度应远高于 vectors[0] 与 vectors[2]</span>
+<span class="hl-keyword">print</span>(<span class="hl-builtin">len</span>(vectors[<span class="hl-number">0</span>]))  <span class="hl-comment"># 1536</span></code></pre>
+        </div>
+
+        <p>本项目在 <code>app/services/embedding.py</code> 中封装了更实用的异步方法：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python — 项目中的实际实现</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-keyword">async</span> <span class="hl-keyword">def</span> <span class="hl-func">embed_texts</span>(texts: <span class="hl-builtin">list</span>[<span class="hl-builtin">str</span>]) -> <span class="hl-builtin">list</span>[<span class="hl-builtin">list</span>[<span class="hl-builtin">float</span>]]:
+    <span class="hl-string">"""对一批文本进行向量化，返回对应的向量列表"""</span>
+    client = _get_embedding_client()
+    response = <span class="hl-keyword">await</span> client.embeddings.create(
+        model=EMBEDDING_MODEL,
+        input=texts,
+    )
+    <span class="hl-keyword">return</span> [item.embedding <span class="hl-keyword">for</span> item <span class="hl-keyword">in</span> response.data]
+
+
+<span class="hl-keyword">async</span> <span class="hl-keyword">def</span> <span class="hl-func">embed_single</span>(text: <span class="hl-builtin">str</span>) -> <span class="hl-builtin">list</span>[<span class="hl-builtin">float</span>]:
+    <span class="hl-string">"""对单段文本进行向量化"""</span>
+    results = <span class="hl-keyword">await</span> embed_texts([text])
+    <span class="hl-keyword">return</span> results[<span class="hl-number">0</span>]</code></pre>
+        </div>
+
+        <div class="info-box warning">
+          <strong>注意事项</strong>
+          Embedding API 按 token 数量计费。<code>text-embedding-3-small</code> 的价格约为 $0.02 / 1M tokens，性价比极高。生产环境中应避免对同一文本重复计算向量，尽量缓存结果。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Embedding 模型对比 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">03</div>
+        <h2>Embedding 模型对比</h2>
+      </div>
+      <div class="card-body">
+        <p>截至目前，OpenAI 提供了三款主流 Embedding 模型，各有侧重：</p>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>模型</th>
+              <th>维度</th>
+              <th>适用场景</th>
+              <th>价格（每 1M tokens）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>text-embedding-3-small</code></td>
+              <td>1536</td>
+              <td><strong>效率优先</strong>：大批量文档处理、实时检索、成本敏感场景</td>
+              <td>$0.02</td>
+            </tr>
+            <tr>
+              <td><code>text-embedding-3-large</code></td>
+              <td>3072</td>
+              <td><strong>精度优先</strong>：对检索准确率要求极高的场景</td>
+              <td>$0.13</td>
+            </tr>
+            <tr>
+              <td><code>text-embedding-ada-002</code></td>
+              <td>1536</td>
+              <td><strong>旧版兼容</strong>：遗留系统迁移，不建议新项目使用</td>
+              <td>$0.10</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="margin-top:12px;color:#616161;font-size:0.85rem;"><code>text-embedding-3-small</code> 是绝大多数 RAG 项目的首选：它在价格和精度之间取得了极佳的平衡，1536 维的向量也非常适合 ChromaDB 使用。</p>
+      </div>
+    </div>
+
+    <!-- Section 4: 向量空间的直觉 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">04</div>
+        <h2>可视化：向量空间的直觉</h2>
+      </div>
+      <div class="card-body">
+        <p>虽然我们无法直接可视化 1536 维空间，但通过降维（如 PCA 或 t-SNE）到 2D，可以看到语义相近的句子在向量空间中确实聚在一起：</p>
+
+        <div class="chart-container">
+          <svg viewBox="0 0 640 340" xmlns="http://www.w3.org/2000/svg">
+            <!-- Background grid -->
+            <rect x="40" y="20" width="560" height="280" rx="8" fill="#fafbfe" stroke="#e0e0e0" stroke-width="1"/>
+            <line x1="40" y1="160" x2="600" y2="160" stroke="#eee" stroke-width="1"/>
+            <line x1="320" y1="20" x2="320" y2="300" stroke="#eee" stroke-width="1"/>
+
+            <!-- Cluster 1: Weather related -->
+            <circle cx="140" cy="200" r="95" fill="#e8eaf6" stroke="#5c6bc0" stroke-dasharray="6,3" stroke-width="1.5" opacity="0.8"/>
+            <text x="140" y="310" text-anchor="middle" fill="#5c6bc0" font-size="11" font-weight="600">天气相关语义集群</text>
+
+            <circle cx="130" cy="190" r="10" fill="#1a237e"/>
+            <text x="155" y="195" fill="#212121" font-size="12">今天天气很好</text>
+            <line x1="140" y1="190" x2="265" y2="185" stroke="#ccc" stroke-width="0.8"/>
+
+            <circle cx="275" cy="185" r="10" fill="#283593"/>
+            <text x="300" y="190" fill="#212121" font-size="12">今日气候宜人</text>
+            <line x1="140" y1="190" x2="100" y2="215" stroke="#ccc" stroke-width="0.8"/>
+
+            <circle cx="90" cy="220" r="10" fill="#3949ab"/>
+            <text x="45" y="270" fill="#212121" font-size="12">外面阳光明媚</text>
+
+            <!-- Cluster 2: Food related -->
+            <circle cx="490" cy="120" r="90" fill="#f3e5f5" stroke="#7b1fa2" stroke-dasharray="6,3" stroke-width="1.5" opacity="0.8"/>
+            <text x="490" y="30" text-anchor="middle" fill="#7b1fa2" font-size="11" font-weight="600">食物相关语义集群</text>
+
+            <circle cx="480" cy="110" r="10" fill="#6a1b9a"/>
+            <text x="505" y="115" fill="#212121" font-size="12">我喜欢吃苹果</text>
+
+            <circle cx="510" cy="135" r="10" fill="#8e24aa"/>
+            <text x="535" y="140" fill="#212121" font-size="12">香蕉味道不错</text>
+
+            <circle cx="460" cy="95" r="10" fill="#ab47bc"/>
+            <text x="420" y="70" fill="#212121" font-size="12">今天晚餐吃鱼</text>
+
+            <!-- Distance marker -->
+            <line x1="270" y1="185" x2="470" y2="115" stroke="#f57f17" stroke-width="1.5" stroke-dasharray="8,4"/>
+            <text x="370" y="130" text-anchor="middle" fill="#f57f17" font-size="10" font-weight="600">距离很远 ≈ 0.15</text>
+
+            <!-- Legend -->
+            <rect x="560" y="300" width="12" height="12" rx="2" fill="#5c6bc0" opacity="0.8"/>
+            <text x="576" y="310" fill="#616161" font-size="9">天气集群</text>
+            <rect x="620" y="300" width="12" height="12" rx="2" fill="#7b1fa2" opacity="0.8"/>
+            <text x="636" y="310" fill="#616161" font-size="9">食物集群</text>
+          </svg>
+        </div>
+
+        <p style="text-align:center;color:#616161;font-size:0.85rem;">语义相近的文本在向量空间中形成集群，不同主题的文本彼此远离。这就是 RAG 检索能够"找到相关内容"的根本原理。</p>
+
+        <div class="info-box">
+          <strong>降维可视化工具</strong>
+          实际项目中，可以用 <code>scikit-learn</code> 的 <code>PCA</code> 或 <code>UMAP</code> 将高维向量降维到 2D 或 3D 进行可视化分析。这有助于判断向量质量、发现知识盲区、优化分块策略。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: 项目中的 Embedding 配置 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">05</div>
+        <h2>项目中的 Embedding 配置</h2>
+      </div>
+      <div class="card-body">
+        <p>在我们的 FastAPI 项目中，Embedding 相关配置统一管理在 <code>app/utils/config.py</code> 中：</p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">.env 环境变量</span>
+            <button class="copy-btn">复制代码</button>
+          </div>
+          <pre><code><span class="hl-comment"># Embedding 配置</span>
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_API_KEY=sk-xxx    <span class="hl-comment"># 默认复用 OPENAI_API_KEY</span>
+EMBEDDING_BASE_URL=https://api.openai.com/v1</code></pre>
+        </div>
+
+        <div class="info-box success">
+          <strong>多平台兼容</strong>
+          由于 OpenAI Embedding API 已成为行业标准，许多平台都提供了兼容接口。你可以通过修改 <code>EMBEDDING_BASE_URL</code> 和 <code>EMBEDDING_API_KEY</code> 切换到 <strong>DeepSeek</strong>、<strong>阿里云 DashScope</strong>、<strong>腾讯混元</strong> 等国内平台的 Embedding 服务，只需确保 API 格式兼容 OpenAI 即可。
+        </div>
+
+        <p>这种灵活的设计意味着你的 RAG 系统不会因为某个平台的 API 政策变化而瘫痪——随时可以切换到成本更低或效果更好的 Embedding 服务。</p>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 动手练习</h3>
+      <ol>
+        <li>调用 OpenAI Embedding API，分别向量化 <code>"人工智能"</code> 和 <code>"AI"</code>，用 NumPy 计算它们的余弦相似度。</li>
+        <li>找几组语义相近（如 "深度学习"、"神经网络"）和语义无关（如 "机器学习"、"猫"）的句子，观察向量距离的规律。</li>
+        <li>尝试用 <code>text-embedding-3-large</code> 重新计算同样的句子，对比两种模型输出的相似度是否有明显差异。</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">✓</div>
+        <h2>本课小结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>Embedding 将文本转换为<strong>固定长度的浮点数向量</strong>，语义相近的文本向量距离更近</li>
+          <li>OpenAI 提供三款 Embedding 模型：<strong>text-embedding-3-small</strong>（1536维，推荐）、<strong>text-embedding-3-large</strong>（3072维）、<strong>text-embedding-ada-002</strong>（旧版）</li>
+          <li>本项目封装了 <code>embed_texts()</code> 和 <code>embed_single()</code> 两个异步方法，支持批量向量化</li>
+          <li>向量空间中的距离规律是 RAG 检索的理论基础：相关文本聚在一起，无关文本远离</li>
+          <li>通过修改环境变量，可以灵活切换到不同平台的 Embedding 服务</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <a href="01-rag-overview.html">← 上一篇<br><small>RAG 技术概述</small></a>
+      <div class="nav-index">第 2 课 / 共 12 课</div>
+      <a href="03-vector-similarity.html">下一篇 →<br><small>向量相似度检索</small></a>
+    </div>
+
+  </div>
+
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG 完整管道：从文档到答案</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 5-7</span><span class="sep">›</span><span>RAG 管道</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="09-sse-streaming.html">SSE 流式</a>
+    </div>
+  </nav>
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>10 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="10" data-total="12"></div></div>
+  </div>
+  <section class="hero">
+    <div class="lesson-number">第 10 课</div>
+    <h1>RAG 完整管道：从文档到答案</h1>
+    <p class="subtitle">深入 <code>rag_pipeline.py</code>，详解检索、Prompt 构建与 LLM 生成的完整链路</p>
+  </section>
+  <div class="main-container">
+
+    <!-- Section 1: 管道全景 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">01</span>
+        <h2>管道全景</h2>
+      </div>
+      <div class="card-body">
+        <p>RAG 管道是整个系统的核心。它将前面学到的所有组件串联起来：Embedding、ChromaDB 检索、Prompt 模板、LLM 调用、SSE 输出。下面是完整的管道流程图：</p>
+
+        <!-- Flowchart SVG -->
+        <svg viewBox="0 0 850 560" style="width:100%; max-width:850px; display:block; margin:24px auto;">
+          <defs>
+            <marker id="arrow10" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1"/>
+            </marker>
+          </defs>
+          <!-- Node 1: 用户问题 -->
+          <rect x="310" y="20" width="230" height="48" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+          <text x="425" y="50" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">👤 用户问题</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="68" x2="425" y2="98" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 2: embed_single -->
+          <rect x="310" y="102" width="230" height="48" rx="10" fill="#fdf2f8" stroke="#ec4899" stroke-width="2"/>
+          <text x="425" y="132" text-anchor="middle" font-size="15" font-weight="700" fill="#be185d">embed_single() 向量化</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="150" x2="425" y2="180" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 3: ChromaDB.search -->
+          <rect x="310" y="184" width="230" height="48" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+          <text x="425" y="214" text-anchor="middle" font-size="15" font-weight="700" fill="#047857">ChromaDB.search() 检索</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="232" x2="425" y2="262" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 4: Top-K Chunks -->
+          <rect x="310" y="266" width="230" height="48" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+          <text x="425" y="296" text-anchor="middle" font-size="15" font-weight="700" fill="#b45309">Top-K 相关 Chunks</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="314" x2="425" y2="344" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 5: build_context -->
+          <rect x="310" y="348" width="230" height="48" rx="10" fill="#fdf2f8" stroke="#ec4899" stroke-width="2"/>
+          <text x="425" y="378" text-anchor="middle" font-size="15" font-weight="700" fill="#be185d">_build_context() 构建上下文</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="396" x2="425" y2="426" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 6: Prompt Template -->
+          <rect x="310" y="430" width="230" height="48" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+          <text x="425" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">Prompt 模板填充</text>
+
+          <!-- Arrow -->
+          <line x1="425" y1="478" x2="425" y2="508" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow10)"/>
+
+          <!-- Node 7: LLM.stream -->
+          <rect x="310" y="512" width="230" height="48" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+          <text x="425" y="542" text-anchor="middle" font-size="15" font-weight="700" fill="#047857">LLM.stream() 流式生成</text>
+
+          <!-- Right side annotations -->
+          <text x="580" y="130" font-size="11" fill="#666">text-embedding-3-small</text>
+          <text x="580" y="212" font-size="11" fill="#666">余弦相似度排序</text>
+          <text x="580" y="294" font-size="11" fill="#666">score 从高到低</text>
+          <text x="580" y="376" font-size="11" fill="#666">格式化 [1] [2] ...</text>
+          <text x="580" y="458" font-size="11" fill="#666">{context} {question}</text>
+          <text x="580" y="540" font-size="11" fill="#666">token by token</text>
+        </svg>
+
+        <div class="info-box" style="margin-top:20px;">
+          <strong>管道使用的核心数据结构：</strong>
+          <ul style="margin:8px 0 0 20px; padding:0;">
+            <li><code>RetrievedChunk</code>: <code>doc_id</code>, <code>filename</code>, <code>chunk_index</code>, <code>content</code>, <code>content_preview</code>, <code>score</code></li>
+            <li><code>Citation</code>: <code>doc_id</code>, <code>filename</code>, <code>chunk_index</code>, <code>content_snippet</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Step 1 - 检索 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">02</span>
+        <h2>Step 1: 检索 (Retrieve)</h2>
+      </div>
+      <div class="card-body">
+        <p>检索是 RAG 管道的第一步，也是决定答案质量的<strong>最关键步骤</strong>。如果检索不到正确的 Chunk，再好的 LLM 也只能产生无意义的回答。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/rag_pipeline.py</span><button class="copy-btn">复制</button></div>
+          <pre>from app.schemas.qa import RetrievedChunkPreview
+from app.services.vector_store import get_vector_store
+
+async def retrieve_chunks(
+    question: str,
+    top_k: int = 5,
+    store = None
+) -> list:
+    """
+    将用户问题转为向量，在 ChromaDB 中检索最相关的 Chunks
+
+    Args:
+        question: 用户原始问题
+        top_k: 返回的最相关结果数量
+        store: ChromaDB 存储实例（可选，用于依赖注入）
+
+    Returns:
+        list[RetrievedChunk]: 按相似度降序排列的检索结果
+    """
+    store = store or get_vector_store()
+    results = await store.search(query=question, top_k=top_k)
+
+    chunks = []
+    for r in results:
+        chunk = {
+            "doc_id": r["doc_id"],
+            "filename": r["filename"],
+            "chunk_index": r["chunk_index"],
+            "content": r["content"],
+            "content_preview": r["content_preview"],
+            "score": r["score"],
+        }
+        chunks.append(chunk)
+
+    return chunks</pre>
+        </div>
+        <div class="info-box warning" style="margin-top:20px;">
+          <strong>关键要点：</strong>
+          <ul style="margin:8px 0 0 20px; padding:0;">
+            <li><code>store.search(query, top_k)</code> 内部自动调用 <code>embed_single(query)</code> 将问题转为向量</li>
+            <li><code>score</code> 是余弦相似度，值越接近 1 表示越相关</li>
+            <li><code>top_k</code> 的值很重要：太小可能遗漏相关信息，太大可能引入噪声干扰 LLM</li>
+            <li>排名靠前的 Chunk 会出现在 Prompt 最前面，LLM 倾向于更关注前面的内容</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Step 2 - 构建上下文 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">03</span>
+        <h2>Step 2: 构建上下文 (Build Context)</h2>
+      </div>
+      <div class="card-body">
+        <p>检索到的 Chunks 是散乱的文本片段，需要将它们格式化为结构清晰的上下文，方便 LLM 理解。同时要标注来源，让 LLM 能在回答中引用。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/rag_pipeline.py</span><button class="copy-btn">复制</button></div>
+          <pre>def _build_context(chunks: list) -> str:
+    """
+    将检索到的 Chunks 格式化为上下文文本
+
+    每个 Chunk 被编号并标注来源，便于 LLM 在回答中引用
+
+    Args:
+        chunks: retrieve_chunks() 的返回结果
+
+    Returns:
+        格式化后的上下文字符串
+    """
+    parts = []
+    for i, chunk in enumerate(chunks):
+        parts.append(
+            f"[{i + 1}] (来源: {chunk['filename']})\n"
+            f"{chunk['content']}"
+        )
+    return "\n\n".join(parts)</pre>
+        </div>
+        <p style="margin-top:20px;">构建后的上下文看起来像这样：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">构建后的上下文示例</span><button class="copy-btn">复制</button></div>
+          <pre>[1] (来源: transformer_paper.pdf)
+Transformer架构由Vaswani等人在2017年的论文"Attention Is All You Need"中提出。
+它完全基于注意力机制，摒弃了传统的循环和卷积结构...
+
+[2] (来源: ml_basics.md)
+Transformer的核心创新是自注意力机制（Self-Attention），它让模型能够
+在处理每个 token 时关注输入序列中的所有其他 token...
+
+[3] (来源: dl_history.pdf)
+在Transformer之前，序列建模主要依赖RNN和LSTM。这些模型的一个主要
+问题是难以并行化，因为每个时间步都依赖前一个时间步的输出...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Step 3 - Prompt 模板 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">04</span>
+        <h2>Step 3: Prompt 模板</h2>
+      </div>
+      <div class="card-body">
+        <p>Prompt 模板是 RAG 系统与 LLM 的 <strong>"接口契约"</strong>。好的 Prompt 设计决定了 LLM 能否正确使用检索到的资料、能否给出准确的回答。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — RAG Prompt 模板</span><button class="copy-btn">复制</button></div>
+          <pre>RAG_PROMPT_TEMPLATE = """你是一个知识库问答助手。基于以下参考资料回答用户问题。
+
+参考资料：
+{context}
+
+用户问题：{question}
+
+要求：
+1. 回答准确、简洁，直接回应用户的问题
+2. 引用资料内容时标注来源编号，如 [1]、[2]
+3. 如果资料不足以回答用户的问题，请明确说明"现有资料中未找到相关信息"
+4. 不要编造资料中没有的内容"""</pre>
+        </div>
+        <div class="info-box" style="margin-top:20px;">
+          <strong>Prompt 设计的四个核心要素：</strong>
+          <ol style="margin:8px 0 0 20px; padding:0;">
+            <li><strong>角色定义</strong>：明确 AI 的身份（知识库问答助手），约束行为边界</li>
+            <li><strong>参考资料</strong>：将检索到的上下文注入 Prompt，这是 RAG 的关键</li>
+            <li><strong>用户问题</strong>：保留原始问题，确保 LLM 明确知道要回答什么</li>
+            <li><strong>格式要求</strong>：规定回答格式，包括引用标注、准确性要求、边界声明</li>
+          </ol>
+        </div>
+        <div class="info-box success" style="margin-top:16px;">
+          <strong>Prompt 最佳实践：</strong>要求「如果资料不足以回答，请明确说明」非常重要。这可以大幅降低 LLM 的幻觉——如果文档中没有相关信息，它会诚实说明，而不是凭空编造。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Step 4 - 流式生成 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">05</span>
+        <h2>Step 4: 流式生成 (Generate)</h2>
+      </div>
+      <div class="card-body">
+        <p>这是管道的最后一步——将组装好的 Prompt 发送给 LLM，并以流式方式逐 token 返回。注意这里使用的是 <strong>无历史消息的对话</strong>，只发送一条 user message。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/rag_pipeline.py</span><button class="copy-btn">复制</button></div>
+          <pre>from app.services.llm import get_client, get_model
+from typing import AsyncIterator
+
+async def generate_answer_stream(
+    question: str,
+    chunks: list,
+    template: str = RAG_PROMPT_TEMPLATE
+) -> AsyncIterator[str]:
+    """
+    构建 Prompt 并流式生成 RAG 增强回答
+
+    Args:
+        question: 用户原始问题
+        chunks: 检索到的相关 Chunks 列表
+        template: Prompt 模板
+
+    Yields:
+        每个 token 作为单独的字符串
+    """
+    client = get_client()
+    context = _build_context(chunks)
+    prompt = template.format(context=context, question=question)
+
+    response = await client.chat.completions.create(
+        model=get_model(),
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        stream=True,  # 开启流式输出
+    )
+
+    async for chunk in response:
+        delta = chunk.choices[0].delta
+        if delta.content is not None:
+            yield delta.content</pre>
+        </div>
+        <div class="info-box warning" style="margin-top:20px;">
+          <strong>注意：</strong>
+          <ul style="margin:8px 0 0 20px; padding:0;">
+            <li>使用的是 <code>messages=[{"role": "user", "content": prompt}]</code>，没有 system message</li>
+            <li><code>stream=True</code> 返回的是异步迭代器，不是完整的响应</li>
+            <li><code>delta.content</code> 可能为 <code>None</code>（某些 chunk 只包含元数据），需要检查</li>
+            <li>每个 yield 对应一个 LangChain token，前端实时追加显示</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 6: 引用提取 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">06</span>
+        <h2>引用提取</h2>
+      </div>
+      <div class="card-body">
+        <p>引用来源是 RAG 系统的关键特性——不仅给出答案，还能告诉用户答案来自哪里。这段代码在答案生成完毕后，从检索到的 Chunks 中提取引用信息：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/rag_pipeline.py</span><button class="copy-btn">复制</button></div>
+          <pre>def _extract_citations(chunks: list) -> list:
+    """
+    从检索到的 Chunks 提取引用来源信息
+
+    每个引用包含文档标识和内容摘要（前300字），
+    方便前端展示和使用者判断来源可信度。
+
+    Args:
+        chunks: 检索到的 Chunks 列表
+
+    Returns:
+        list[Citation]: 引用信息列表
+    """
+    citations = []
+    for c in chunks:
+        citations.append({
+            "doc_id": c["doc_id"],
+            "filename": c["filename"],
+            "chunk_index": c["chunk_index"],
+            "content_snippet": c["content"][:300],
+        })
+    return citations</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 7: 完整管道函数 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">07</span>
+        <h2>完整管道函数</h2>
+      </div>
+      <div class="card-body">
+        <p>最后，将检索、生成和引用提取三部分组装成一个完整的管道函数：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/rag_pipeline.py</span><button class="copy-btn">复制</button></div>
+          <pre>async def rag_pipeline(
+    question: str,
+    top_k: int = 5,
+    store = None
+):
+    """
+    RAG 完整管道 — 一次调用完成检索 + 生成 + 引用提取
+
+    这是整个 RAG 系统的核心入口函数。
+    路由器 (routers/qa.py) 直接调用此函数获取所有结果。
+
+    Args:
+        question: 用户问题
+        top_k: 检索结果数量 (默认5)
+        store: ChromaDB 存储实例（可选，用于测试时注入 mock）
+
+    Returns:
+        tuple: (chunks, answer_stream, citations)
+        - chunks: 检索到的相关文档片段
+        - answer_stream: LLM 流式生成的答案 token 流
+        - citations: 引用来源列表
+    """
+    # Step 1: 检索
+    chunks = await retrieve_chunks(question, top_k, store)
+
+    # Step 2: 流式生成
+    answer_stream = generate_answer_stream(question, chunks)
+
+    # Step 3: 引用提取
+    citations = _extract_citations(chunks)
+
+    return chunks, answer_stream, citations</pre>
+        </div>
+        <div class="info-box success" style="margin-top:20px;">
+          <strong>这就是整个 RAG 系统的核心！</strong>三个步骤，十几行代码，但每一步都建立在前面所有知识的基础上：向量 Embedding → ChromaDB 存储与检索 → Prompt 工程 → LLM API 调用 → 流式输出。理解这个管道函数，就理解了 RAG 的全部。
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 练习任务</h3>
+      <ol>
+        <li>打开 <code>app/services/rag_pipeline.py</code>，从头到尾阅读一遍</li>
+        <li>追踪一个完整的问答请求：从 <code>POST /api/v1/qa/ask</code> 到 SSE <code>done</code> 事件
+          <ul>
+            <li>routers/qa.py → rag_pipeline() → retrieve_chunks() → embed_single() → ChromaDB.search()</li>
+            <li>→ _build_context() → generate_answer_stream() → AsyncOpenAI → _extract_citations()</li>
+          </ul>
+        </li>
+        <li>画出完整的数据流图，标注每个环节的输入和输出</li>
+        <li>尝试修改 <code>top_k</code> 的值（1, 3, 10），观察回答质量的差异</li>
+        <li>修改 <code>RAG_PROMPT_TEMPLATE</code>，看看 Prompt 变化对回答风格的影响</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">📋</span>
+        <h2>本课总结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>RAG 管道由 <strong>4 个核心步骤</strong>组成：检索 → 构建上下文 → Prompt 填充 → 流式生成</li>
+          <li><code>retrieve_chunks()</code> 将问题 Embedding 后在 ChromaDB 中检索 Top-K 相关 Chunks</li>
+          <li><code>_build_context()</code> 将 Chunks 格式化为编号的上下文字符串，标注来源文件名</li>
+          <li><code>RAG_PROMPT_TEMPLATE</code> 包含角色定义、参考资料、问题、格式要求（4 要素）</li>
+          <li><code>generate_answer_stream()</code> 使用 <code>stream=True</code> 逐 token 返回 LLM 响应</li>
+          <li><code>_extract_citations()</code> 从检索结果中提取引用来源，支持答案可追溯</li>
+          <li><code>rag_pipeline()</code> 是管道的统一入口，一行调用返回全部三个结果</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <a href="09-sse-streaming.html" class="nav-prev">← 第 9 课：SSE 流式输出</a>
+      <a href="01-rag-overview.html" class="nav-index">返回首页</a>
+      <a href="11-rag-vs-bare.html" class="nav-next">第 11 课：RAG vs 纯 LLM →</a>
+    </nav>
+
+  </div>
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

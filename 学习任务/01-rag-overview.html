@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG 技术概述：为什么大模型需要外部知识</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 1-2</span><span class="sep">›</span><span>RAG 技术概述</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="07-chromadb.html">ChromaDB</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+
+  <!-- Progress Bar -->
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>1 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="1" data-total="12"></div></div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="lesson-number">第 01 课</div>
+    <h1>RAG 技术概述：为什么大模型需要外部知识</h1>
+    <p class="subtitle">从 LLM 的局限性出发，理解检索增强生成的核心理念与工作流程</p>
+  </section>
+
+  <!-- Main Content -->
+  <div class="main-container">
+
+    <!-- Section 1: 什么是 RAG？ -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">01</div>
+        <h2>什么是 RAG？</h2>
+      </div>
+      <div class="card-body">
+        <p>RAG（<strong>Retrieval-Augmented Generation</strong>，检索增强生成）是一种将<strong>信息检索</strong>与<strong>大语言模型生成</strong>相结合的技术架构。它的核心思想是：在 LLM 回答问题之前，先从外部知识库中检索最相关的文档片段，将其注入到 Prompt 中，使 LLM 能够基于"参考资料"生成更准确、更可信的回答。</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>R = Retrieval（检索）</h3>
+            <p>从知识库中<strong>查找相关信息</strong>。将用户查询向量化后，在向量数据库中执行相似度搜索，返回语义最相近的文档片段。</p>
+          </div>
+          <div class="concept-item">
+            <h3>A = Augmentation（增强）</h3>
+            <p>将检索结果<strong>注入 Prompt</strong>。把搜索到的相关文档片段拼接到提示词模板中，为 LLM 提供可靠的参考上下文。</p>
+          </div>
+          <div class="concept-item">
+            <h3>G = Generation（生成）</h3>
+            <p>LLM 基于增强后的上下文<strong>生成回答</strong>。模型不再仅凭内部记忆作答，而是引用外部知识，大幅降低幻觉风险。</p>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <svg viewBox="0 0 880 120" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="35" width="120" height="50" rx="8" fill="#1a237e"/>
+            <text x="70" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">用户提问</text>
+            <line x1="130" y1="60" x2="170" y2="60" stroke="#5c6bc0" stroke-width="3" marker-end="url(#arrow1)"/>
+            <rect x="175" y="35" width="120" height="50" rx="8" fill="#283593"/>
+            <text x="235" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">向量检索</text>
+            <line x1="295" y1="60" x2="335" y2="60" stroke="#5c6bc0" stroke-width="3" marker-end="url(#arrow1)"/>
+            <rect x="340" y="35" width="120" height="50" rx="8" fill="#3949ab"/>
+            <text x="400" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">相关文档</text>
+            <line x1="460" y1="60" x2="500" y2="60" stroke="#5c6bc0" stroke-width="3" marker-end="url(#arrow1)"/>
+            <rect x="505" y="35" width="140" height="50" rx="8" fill="#5c6bc0"/>
+            <text x="575" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">拼接上下文</text>
+            <line x1="645" y1="60" x2="685" y2="60" stroke="#5c6bc0" stroke-width="3" marker-end="url(#arrow1)"/>
+            <rect x="690" y="35" width="120" height="50" rx="8" fill="#1a237e"/>
+            <text x="750" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">LLM 生成</text>
+            <defs>
+              <marker id="arrow1" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5c6bc0"/></marker>
+            </defs>
+          </svg>
+          <p style="text-align:center;font-size:0.8rem;color:#9e9e9e;margin-top:8px;">RAG 核心流程：用户提问 → 向量检索 → 相关文档 → 拼接上下文 → LLM 生成 → 带引用回答</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: 为什么 LLM 需要 RAG？ -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">02</div>
+        <h2>为什么 LLM 需要 RAG？</h2>
+      </div>
+      <div class="card-body">
+        <p>大语言模型虽然能力强大，但存在三个核心局限性，而 RAG 正是为弥补这些不足而生：</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>幻觉问题（Hallucination）</h3>
+            <p>LLM 可能编造不存在的事实、人物或事件。当被问及超出训练数据的知识时，模型仍会"自信地"给出错误答案。RAG 通过提供可验证的外部文档来抑制幻觉。</p>
+          </div>
+          <div class="concept-item">
+            <h3>知识截止日期（Knowledge Cutoff）</h3>
+            <p>训练数据有截止时间。例如 GPT-4 无法知晓训练之后发生的事件、发布的新论文或最新的法规。RAG 连接到实时文档库，使模型能够回答关于最新信息的问题。</p>
+          </div>
+          <div class="concept-item">
+            <h3>领域知识缺失（Domain Knowledge Gap）</h3>
+            <p>通用模型缺乏特定领域的专业知识，如企业内部文档、医疗病例、法律判例等。RAG 可以将这些私有知识注入上下文，使通用模型也能胜任专业任务。</p>
+          </div>
+        </div>
+
+        <div class="info-box">
+          <strong>RAG 的核心价值</strong>
+          让 LLM "引用"外部知识，而不是仅凭记忆回答。正如学生考试时"开卷"比"闭卷"更可靠——RAG 就是给 LLM 的"开卷考试"。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: RAG 工作流程 — 四阶段详解 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">03</div>
+        <h2>RAG 工作流程 — 四阶段详解</h2>
+      </div>
+      <div class="card-body">
+        <p>一个完整的 RAG 系统包含四个阶段，每个阶段都至关重要：</p>
+
+        <ol class="steps-list">
+          <li>
+            <strong>索引（Indexing）</strong>
+            <p>文档 → 文本提取 → 分块（Chunking）→ 向量化（Embedding）→ 存入向量数据库。这一阶段将非结构化的文档转化为可检索的向量表示。</p>
+            <p style="color:#616161;font-size:0.8rem;">本项目使用：<code class="tag tech">pdfplumber</code> 进行 PDF 文本提取，<code class="tag tech">OpenAI Embedding API</code> 生成向量，<code class="tag tech">ChromaDB</code> 存储与检索。</p>
+          </li>
+          <li>
+            <strong>检索（Retrieval）</strong>
+            <p>用户提问 → 向量化 → 相似度搜索（余弦相似度）→ 返回 Top-K 个最相关的 Chunk。检索质量直接决定了 RAG 的上限。</p>
+          </li>
+          <li>
+            <strong>增强（Augmentation）</strong>
+            <p>将检索到的 Chunk 拼入 Prompt 模板中。典型的 Prompt 结构为：系统指令 + 检索到的上下文 + 用户原始问题。</p>
+          </li>
+          <li>
+            <strong>生成（Generation）</strong>
+            <p>LLM 基于增强后的 Prompt 生成答案，并在回答中标注信息来源（Citation），让用户能够验证内容的真实性。</p>
+          </li>
+        </ol>
+
+        <div class="chart-container">
+          <svg viewBox="0 0 880 180" xmlns="http://www.w3.org/2000/svg">
+            <!-- Stage 1 -->
+            <rect x="0" y="10" width="200" height="155" rx="10" fill="#e8eaf6" stroke="#5c6bc0" stroke-width="2"/>
+            <text x="100" y="38" text-anchor="middle" fill="#1a237e" font-size="14" font-weight="700">索引 Indexing</text>
+            <text x="100" y="60" text-anchor="middle" fill="#616161" font-size="11">文档 → 提取 → 分块</text>
+            <text x="100" y="78" text-anchor="middle" fill="#616161" font-size="11">→ 向量化 → 存储</text>
+            <text x="100" y="105" text-anchor="middle" fill="#3949ab" font-size="10">ChromaDB / 向量数据库</text>
+
+            <!-- Arrow 1→2 -->
+            <line x1="200" y1="87" x2="240" y2="87" stroke="#5c6bc0" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+            <!-- Stage 2 -->
+            <rect x="245" y="10" width="200" height="155" rx="10" fill="#f3e5f5" stroke="#7b1fa2" stroke-width="2"/>
+            <text x="345" y="38" text-anchor="middle" fill="#4a148c" font-size="14" font-weight="700">检索 Retrieval</text>
+            <text x="345" y="60" text-anchor="middle" fill="#616161" font-size="11">用户提问 → 向量化</text>
+            <text x="345" y="78" text-anchor="middle" fill="#616161" font-size="11">→ 相似度搜索</text>
+            <text x="345" y="105" text-anchor="middle" fill="#7b1fa2" font-size="10">余弦相似度 / Top-K</text>
+
+            <!-- Arrow 2→3 -->
+            <line x1="445" y1="87" x2="485" y2="87" stroke="#5c6bc0" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+            <!-- Stage 3 -->
+            <rect x="490" y="10" width="200" height="155" rx="10" fill="#fff3e0" stroke="#e65100" stroke-width="2"/>
+            <text x="590" y="38" text-anchor="middle" fill="#bf360c" font-size="14" font-weight="700">增强 Augmentation</text>
+            <text x="590" y="60" text-anchor="middle" fill="#616161" font-size="11">检索到的 Chunk</text>
+            <text x="590" y="78" text-anchor="middle" fill="#616161" font-size="11">→ 拼入 Prompt 模板</text>
+            <text x="590" y="105" text-anchor="middle" fill="#e65100" font-size="10">构造增强上下文</text>
+
+            <!-- Arrow 3→4 -->
+            <line x1="690" y1="87" x2="730" y2="87" stroke="#5c6bc0" stroke-width="2.5" marker-end="url(#arrow2)"/>
+
+            <!-- Stage 4 -->
+            <rect x="735" y="10" width="140" height="155" rx="10" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+            <text x="805" y="38" text-anchor="middle" fill="#1b5e20" font-size="14" font-weight="700">生成 Gen</text>
+            <text x="805" y="60" text-anchor="middle" fill="#616161" font-size="11">LLM 推理</text>
+            <text x="805" y="78" text-anchor="middle" fill="#616161" font-size="11">→ 生成答案</text>
+            <text x="805" y="105" text-anchor="middle" fill="#2e7d32" font-size="10">带引用 &amp; SSE 流式</text>
+
+            <defs>
+              <marker id="arrow2" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#5c6bc0"/></marker>
+            </defs>
+          </svg>
+          <p style="text-align:center;font-size:0.8rem;color:#9e9e9e;margin-top:8px;">四阶段流水线：索引 → 检索 → 增强 → 生成</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: RAG 的实际应用场景 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">04</div>
+        <h2>RAG 的实际应用场景</h2>
+      </div>
+      <div class="card-body">
+        <p>RAG 已经在各行各业得到广泛应用，以下是最典型的几个场景：</p>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>说明</th>
+              <th>典型案例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>智能客服</td>
+              <td>将产品手册、FAQ 文档向量化，客服机器人可精准回答用户问题，避免编造不存在的功能。</td>
+              <td>电商售后、银行客服、SaaS 平台帮助中心</td>
+            </tr>
+            <tr>
+              <td>法律咨询</td>
+              <td>将法律法规、判例文档接入 RAG 系统，辅助律师快速查找相关法条和过往案例。</td>
+              <td>法律文书检索、合同审查</td>
+            </tr>
+            <tr>
+              <td>医疗问答</td>
+              <td>将医学文献、药品说明书接入知识库，辅助医生或患者获取有据可查的医学建议。</td>
+              <td>临床决策支持、用药咨询</td>
+            </tr>
+            <tr>
+              <td>个人知识库</td>
+              <td>将个人的笔记、日记、阅读材料向量化，打造专属的"第二大脑"。</td>
+              <td>Obsidian + RAG、Notion AI</td>
+            </tr>
+            <tr>
+              <td>企业文档搜索</td>
+              <td>将企业内部 Wiki、技术文档、会议纪要接入 RAG，实现跨部门知识共享。</td>
+              <td>Confluence + RAG、企业知识中台</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 5: 本课程项目预览 -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">05</div>
+        <h2>本课程项目预览</h2>
+      </div>
+      <div class="card-body">
+        <p>在接下来的课程中，我们将从零开始，构建一个完整的 <strong>FastAPI + ChromaDB + OpenAI</strong> RAG 系统。以下是项目的架构预览：</p>
+
+        <div class="info-box">
+          <strong>技术栈</strong>
+          <p>
+            <span class="tag tech">FastAPI</span>
+            <span class="tag tech">ChromaDB</span>
+            <span class="tag tech">OpenAI</span>
+            <span class="tag tech">pdfplumber</span>
+            <span class="tag tech">sse-starlette</span>
+            <span class="tag tech">tiktoken</span>
+          </p>
+        </div>
+
+        <p>项目提供两大核心 API：</p>
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>📄 文档管理 API</h3>
+            <p>文件上传（PDF/TXT）、文档列表查询、文档删除。上传后自动解析文本、分块、生成向量并存储到 ChromaDB。</p>
+          </div>
+          <div class="concept-item">
+            <h3>💬 智能问答 API</h3>
+            <p>基于 RAG 的智能问答接口，支持 SSE（Server-Sent Events）流式输出。提供 RAG 模式与纯 LLM 模式的对比回答。</p>
+          </div>
+        </div>
+
+        <p style="margin-top:16px;color:#616161;font-size:0.9rem;">项目结构预览：<code>app/</code> 目录包含 <code>routes/</code>（路由）、<code>services/</code>（核心逻辑）、<code>utils/</code>（配置工具），在主入口 <code>main.py</code> 中组装启动。</p>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 动手思考题</h3>
+      <ol>
+        <li>列举 3 个你认为 RAG 可以显著提升 LLM 表现的具体场景，并说明原因。</li>
+        <li>想一想：如果知识库中有错误信息，RAG 系统会发生什么？如何避免这种情况？</li>
+        <li>搜索 "RAG vs Fine-tuning"，了解两种提升 LLM 能力的方法有何区别，哪种更适合你的场景？</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <div class="icon">✓</div>
+        <h2>本课小结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li>RAG 由<strong>检索（Retrieval）</strong>、<strong>增强（Augmentation）</strong>、<strong>生成（Generation）</strong>三部分组成，本质是<strong>给 LLM 加上外部知识库</strong></li>
+          <li>LLM 的三大局限——幻觉、知识截止日期、领域缺失——正是 RAG 要解决的核心问题</li>
+          <li>RAG 的四个阶段：<strong>索引 → 检索 → 增强 → 生成</strong>，每一阶段都有其独特的技术挑战</li>
+          <li>RAG 已广泛应用于智能客服、法律咨询、医疗问答、企业知识管理等场景</li>
+          <li>本课程将带你从 Embedding 基础开始，逐步构建完整的 FastAPI + ChromaDB + OpenAI RAG 系统</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <a href="#" class="disabled">← 上一篇</a>
+      <div class="nav-index">第 1 课 / 共 12 课</div>
+      <a href="02-embeddings.html">下一篇 →<br><small>Embedding 与向量化</small></a>
+    </div>
+
+  </div>
+
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

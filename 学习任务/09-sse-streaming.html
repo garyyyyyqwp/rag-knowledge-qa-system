@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSE 流式输出原理与实践</title>
+  <link rel="stylesheet" href="css/learning-style.css">
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="nav-brand">RAG 学习路径</div>
+    <div class="nav-breadcrumb">
+      <span>Day 5-7</span><span class="sep">›</span><span>SSE 流式</span>
+    </div>
+    <div class="nav-links">
+      <a href="01-rag-overview.html">概述</a>
+      <a href="04-minimal-rag.html">最简RAG</a>
+      <a href="08-fastapi-microservice.html">微服务</a>
+      <a href="10-rag-pipeline.html">完整管道</a>
+    </div>
+  </nav>
+  <div class="progress-container">
+    <div class="progress-info"><span>学习进度</span><span>9 / 12</span></div>
+    <div class="progress-bar"><div class="fill" data-current="9" data-total="12"></div></div>
+  </div>
+  <section class="hero">
+    <div class="lesson-number">第 9 课</div>
+    <h1>SSE 流式输出原理与实践</h1>
+    <p class="subtitle">理解 Server-Sent Events 协议，掌握项目中的结构化 SSE 事件流</p>
+  </section>
+  <div class="main-container">
+
+    <!-- Section 1: 什么是 SSE -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">01</span>
+        <h2>什么是 SSE？</h2>
+      </div>
+      <div class="card-body">
+        <p><strong>SSE (Server-Sent Events)</strong> 是一种基于 HTTP 的服务器向浏览器<strong>单向推送</strong>事件流的协议。它是 HTML5 标准的一部分，被所有现代浏览器原生支持。</p>
+
+        <div class="compare-grid" style="margin-top:20px;">
+          <div class="compare-box rag">
+            <h3>SSE (Server-Sent Events)</h3>
+            <ul style="padding-left:20px; margin:8px 0;">
+              <li>单向：服务器 → 客户端</li>
+              <li>基于 HTTP 协议，无需额外握手</li>
+              <li>轻量级，代码简单</li>
+              <li>浏览器原生 <code>EventSource</code> API</li>
+              <li>自动重连机制</li>
+              <li>内容类型：<code>text/event-stream</code></li>
+            </ul>
+          </div>
+          <div class="compare-box bare">
+            <h3>WebSocket</h3>
+            <ul style="padding-left:20px; margin:8px 0;">
+              <li>双向：服务器 ↔ 客户端</li>
+              <li>需要 HTTP → WebSocket 协议升级</li>
+              <li>较重量级，需额外库支持</li>
+              <li>需要手动管理连接状态</li>
+              <li>需要自行实现重连逻辑</li>
+              <li>内容类型：<code>application/octet-stream</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 style="margin-top:28px;">SSE 事件格式</h3>
+        <p>SSE 使用简单的文本格式传输事件。每条消息由一个或多个字段组成，以空行结尾：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SSE 事件格式</span><button class="copy-btn">复制</button></div>
+          <pre># 一条完整的事件（以空行分隔）
+event: answer
+data: Transformer架构由Vaswani等人
+
+# 下一条事件
+event: answer
+data: 在2017年提出，彻底改变了
+
+# 最后一条事件
+event: done
+data: {}</pre>
+        </div>
+        <p style="margin-top:12px;">核心规则：</p>
+        <ul style="padding-left:20px;">
+          <li><code>event:</code> 定义事件名称（可选，省略则触发 <code>onmessage</code>）</li>
+          <li><code>data:</code> 事件数据（必需，可多行）</li>
+          <li><code>id:</code> 事件 ID（可选，用于断线重连时定位）</li>
+          <li><strong>每条消息以空行 (<code>\n\n</code>) 结束</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Section 2: 为什么 RAG 需要流式输出 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">02</span>
+        <h2>为什么 RAG 需要流式输出？</h2>
+      </div>
+      <div class="card-body">
+        <p>大语言模型 (LLM) 生成文本的方式是 <strong>token by token</strong>（逐 token 生成）。如果等所有 token 生成完毕再一次性返回给用户，会带来严重的问题：</p>
+
+        <div class="concept-grid">
+          <div class="concept-item">
+            <h3>⏳ 用户体验差</h3>
+            <p>对于几百字的回答，LLM 可能需要 5-15 秒才能完整生成。用户看到白屏等待，体验极差。流式输出让用户看到答案逐字出现，如同对话，体验自然流畅。</p>
+          </div>
+          <div class="concept-item">
+            <h3>📦 内存压力</h3>
+            <p>非流式模式下，服务端必须在内存中累积完整的响应文本才能发送。对于长回答，这会占用大量内存。流式模式中每个 token 即时发送并释放。</p>
+          </div>
+          <div class="concept-item">
+            <h3>🔗 超时风险</h3>
+            <p>如果 LLM 生成时间超过 HTTP 连接超时（通常 30-60 秒），连接会被中断。SSE 通过持续发送数据保持连接活跃，避免超时。</p>
+          </div>
+          <div class="concept-item">
+            <h3>📊 渐进式信息</h3>
+            <p>本项目中，SSE 不仅流式传输答案文本，还流式传输检索结果和引用来源。用户可以在看到答案之前，先看到系统找到了哪些资料。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: 项目 SSE 事件结构 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">03</span>
+        <h2>项目 SSE 事件结构</h2>
+      </div>
+      <div class="card-body">
+        <p>本项目定义了 <strong>4 种结构化 SSE 事件</strong>，每种事件有特定的语义和数据结构。它们按顺序发送，形成一条完整的信息流：</p>
+
+        <!-- Sequence Diagram SVG -->
+        <svg viewBox="0 0 750 500" style="width:100%; max-width:750px; display:block; margin:24px auto;">
+          <defs>
+            <marker id="arrow03" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#4338ca"/>
+            </marker>
+          </defs>
+          <!-- Client -->
+          <rect x="30" y="30" width="110" height="40" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+          <text x="85" y="55" text-anchor="middle" font-size="14" font-weight="700" fill="#4338ca">浏览器</text>
+          <!-- Server -->
+          <rect x="580" y="30" width="110" height="40" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+          <text x="635" y="55" text-anchor="middle" font-size="14" font-weight="700" fill="#047857">服务器</text>
+
+          <!-- POST /ask -->
+          <line x1="85" y1="80" x2="635" y2="80" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow03)"/>
+          <text x="360" y="72" text-anchor="middle" font-size="11" fill="#6366f1">POST /api/v1/qa/ask {"question": "..."}</text>
+
+          <!-- Event 1: retrieval -->
+          <line x1="635" y1="130" x2="85" y2="130" stroke="#10b981" stroke-width="2" marker-end="url(#arrow03)"/>
+          <rect x="180" y="105" width="180" height="50" rx="6" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+          <text x="270" y="125" text-anchor="middle" font-size="12" font-weight="600" fill="#be185d">event: retrieval</text>
+          <text x="270" y="143" text-anchor="middle" font-size="10" fill="#be185d">data: {...chunks...}</text>
+
+          <!-- Event 2: answer (multiple) -->
+          <line x1="635" y1="200" x2="85" y2="200" stroke="#10b981" stroke-width="2" marker-end="url(#arrow03)"/>
+          <rect x="180" y="175" width="180" height="50" rx="6" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+          <text x="270" y="195" text-anchor="middle" font-size="12" font-weight="600" fill="#be185d">event: answer</text>
+          <text x="270" y="213" text-anchor="middle" font-size="10" fill="#be185d">data: "Transformer架构..."</text>
+          <text x="400" y="208" font-size="9" fill="#666">× N 次 (逐 token)</text>
+
+          <!-- Event 3: citations -->
+          <line x1="635" y1="270" x2="85" y2="270" stroke="#10b981" stroke-width="2" marker-end="url(#arrow03)"/>
+          <rect x="180" y="245" width="180" height="50" rx="6" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+          <text x="270" y="265" text-anchor="middle" font-size="12" font-weight="600" fill="#be185d">event: citations</text>
+          <text x="270" y="283" text-anchor="middle" font-size="10" fill="#be185d">data: [...citations...]</text>
+
+          <!-- Event 4: done -->
+          <line x1="635" y1="340" x2="85" y2="340" stroke="#10b981" stroke-width="2" marker-end="url(#arrow03)"/>
+          <rect x="180" y="315" width="180" height="50" rx="6" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+          <text x="270" y="335" text-anchor="middle" font-size="12" font-weight="600" fill="#be185d">event: done</text>
+          <text x="270" y="353" text-anchor="middle" font-size="10" fill="#be185d">data: {}</text>
+
+          <text x="360" y="430" text-anchor="middle" font-size="12" fill="#666">EventSource.close() — 连接关闭</text>
+          <text x="360" y="455" text-anchor="middle" font-size="13" font-weight="600" fill="#4338ca">✅ 完整的一次 SSE 问答流程</text>
+        </svg>
+
+        <p style="margin-top:24px;">核心的 SSE 事件生成器代码：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/streaming.py</span><button class="copy-btn">复制</button></div>
+          <pre>import json
+from typing import AsyncIterator
+
+async def rag_ask_sse(
+    retrieved_chunks: list,
+    answer_stream: AsyncIterator[str],
+    citations_list: list
+) -> AsyncIterator[dict]:
+    """生成 RAG 问答的完整 SSE 事件流"""
+
+    # 事件1：发送检索结果预览
+    chunks_preview = [
+        {
+            "doc_id": c.doc_id,
+            "filename": c.filename,
+            "chunk_index": c.chunk_index,
+            "content_preview": c.content[:200],
+            "score": round(c.score, 4),
+        }
+        for c in retrieved_chunks
+    ]
+    yield {"event": "retrieval", "data": json.dumps({"chunks": chunks_preview})}
+
+    # 事件2：逐 token 发送 LLM 生成的答案
+    async for token in answer_stream:
+        yield {"event": "answer", "data": token}
+
+    # 事件3：发送引用来源列表
+    citations = [
+        {
+            "doc_id": c.doc_id,
+            "filename": c.filename,
+            "chunk_index": c.chunk_index,
+            "content_snippet": c.content[:300],
+        }
+        for c in citations_list
+    ]
+    yield {"event": "citations", "data": json.dumps(citations)}
+
+    # 事件4：流结束信号
+    yield {"event": "done", "data": "{}"}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: sse-starlette 集成 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">04</span>
+        <h2>sse-starlette 集成</h2>
+      </div>
+      <div class="card-body">
+        <p>FastAPI 本身不直接支持 SSE，但 <code>sse-starlette</code> 库提供了 <code>EventSourceResponse</code> 类，可以将异步生成器转换为标准的 SSE 响应：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/routers/qa.py</span><button class="copy-btn">复制</button></div>
+          <pre>from sse_starlette.sse import EventSourceResponse
+from app.services.rag_pipeline import rag_pipeline
+from app.services.streaming import rag_ask_sse
+from app.schemas.qa import QuestionRequest
+
+@router.post("/ask")
+async def ask_question(request: QuestionRequest):
+    """
+    RAG 问答端点 — 返回 SSE 流式响应
+
+    事件序列：retrieval → answer (×N) → citations → done
+    """
+    # 1. 执行 RAG 管道 — 检索 + 生成
+    retrieved_chunks, answer_stream, citations = await rag_pipeline(
+        question=request.question,
+        top_k=request.top_k
+    )
+
+    # 2. 包装为 SSE 事件流
+    return EventSourceResponse(
+        rag_ask_sse(retrieved_chunks, answer_stream, citations)
+    )</pre>
+        </div>
+        <div class="info-box" style="margin-top:20px;">
+          <strong>关键点：</strong>
+          <ul style="margin:8px 0 0 20px; padding:0;">
+            <li><code>EventSourceResponse</code> 自动设置 <code>Content-Type: text/event-stream</code></li>
+            <li>生成器的每个 <code>yield</code> 都会被即时发送给客户端（无需等待生成器结束）</li>
+            <li>客户端断开连接时，生成器会被自动取消</li>
+            <li>支持 <code>Cache-Control: no-cache</code> 防止中间代理缓存</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: 对比端点 -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">05</span>
+        <h2>对比端点：交错输出</h2>
+      </div>
+      <div class="card-body">
+        <p><code>/compare</code> 端点是本项目的一大亮点。它同时获取 RAG 增强回答和纯 LLM 回答，并将两个答案的 token<strong>交错发送</strong>，让用户可以实时对比两种回答的差异：</p>
+
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python — app/services/streaming.py</span><button class="copy-btn">复制</button></div>
+          <pre>async def rag_compare_sse(
+    rag_stream: AsyncIterator[str],
+    bare_stream: AsyncIterator[str],
+    citations_list: list
+) -> AsyncIterator[dict]:
+    """
+    交错输出 RAG 回答和纯 LLM 回答
+
+    事件序列：
+    rag_answer ←→ bare_answer (交错) → rag_citations → done
+    """
+    rag_done = False
+    bare_done = False
+    rag_iter = rag_stream.__aiter__()
+    bare_iter = bare_stream.__aiter__()
+
+    while not (rag_done and bare_done):
+        # 交替获取两个流的 token
+        if not rag_done:
+            try:
+                rag_token = await rag_iter.__anext__()
+                yield {"event": "rag_answer", "data": rag_token}
+            except StopAsyncIteration:
+                rag_done = True
+
+        if not bare_done:
+            try:
+                bare_token = await bare_iter.__anext__()
+                yield {"event": "bare_answer", "data": bare_token}
+            except StopAsyncIteration:
+                bare_done = True
+
+    # 发送 RAG 的引用来源
+    citations = [
+        {"doc_id": c.doc_id, "filename": c.filename,
+         "content_snippet": c.content[:300]}
+        for c in citations_list
+    ]
+    yield {"event": "rag_citations", "data": json.dumps(citations)}
+    yield {"event": "done", "data": "{}"}</pre>
+        </div>
+        <div class="info-box warning" style="margin-top:20px;">
+          <strong>注意：</strong>rag_answer 和 bare_answer 是<strong>交替</strong>发送的。这意味着前端可以同时渲染两列文本，让用户实时看到 RAG 是否比纯 LLM 给出更准确的回答。这是评估 RAG 价值的最直观方式。
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 6: 前端消费 SSE -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">06</span>
+        <h2>前端消费 SSE</h2>
+      </div>
+      <div class="card-body">
+        <p>浏览器原生提供 <code>EventSource</code> 对象来消费 SSE 流。以下是在前端页面中消费本项目 SSE 事件的完整代码：</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JavaScript — 前端</span><button class="copy-btn">复制</button></div>
+          <pre>// 创建 SSE 连接
+const eventSource = new EventSource('/api/v1/qa/ask');
+
+// 监听检索结果事件
+eventSource.addEventListener('retrieval', (e) => {
+    const data = JSON.parse(e.data);
+    console.log(`找到 ${data.chunks.length} 个相关片段`);
+    renderRetrievalResults(data.chunks);
+});
+
+// 监听答案 token 事件（逐 token 追加）
+const answerOutput = document.getElementById('answer-output');
+eventSource.addEventListener('answer', (e) => {
+    answerOutput.textContent += e.data;
+    // 自动滚动到底部
+    answerOutput.scrollTop = answerOutput.scrollHeight;
+});
+
+// 监听引用来源事件
+eventSource.addEventListener('citations', (e) => {
+    const data = JSON.parse(e.data);
+    renderCitations(data);  // 渲染为可点击的链接列表
+});
+
+// 监听流结束事件
+eventSource.addEventListener('done', (e) => {
+    console.log('SSE 流结束');
+    eventSource.close();  // 关闭连接
+});
+
+// 错误处理
+eventSource.onerror = (e) => {
+    console.error('SSE 连接出错:', e);
+    if (eventSource.readyState === EventSource.CLOSED) {
+        showError('连接已断开');
+    }
+};</pre>
+        </div>
+
+        <h3 style="margin-top:24px;">EventSource 状态说明</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>状态</th><th>值</th><th>含义</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>CONNECTING</td><td>0</td><td>正在建立连接</td></tr>
+            <tr><td>OPEN</td><td>1</td><td>连接已建立，正在接收事件</td></tr>
+            <tr><td>CLOSED</td><td>2</td><td>连接已关闭（主动或被动）</td></tr>
+          </tbody>
+        </table>
+
+        <div class="info-box success" style="margin-top:20px;">
+          <strong>最佳实践：</strong>
+          <ul style="margin:8px 0 0 20px; padding:0;">
+            <li>在 <code>done</code> 事件中调用 <code>eventSource.close()</code> 释放连接</li>
+            <li>处理 <code>onerror</code> — EventSource 会自动重连，但你可能需要处理永久性错误</li>
+            <li>对于 /compare 端点，同时监听 <code>rag_answer</code> 和 <code>bare_answer</code> 事件</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Box -->
+    <div class="practice-box">
+      <h3>✏️ 练习任务</h3>
+      <ol>
+        <li>启动服务：<code>uvicorn main:app --reload</code></li>
+        <li>用 <code>curl</code> 测试 SSE 端点：
+          <div class="code-block" style="margin:8px 0;"><pre>curl -N -X POST http://localhost:8000/api/v1/qa/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"什么是Transformer？","top_k":3}'</pre></div>
+        </li>
+        <li>观察输出的事件序列：<code>retrieval</code> → <code>answer</code> (多次) → <code>citations</code> → <code>done</code></li>
+        <li>也测试 <code>/compare</code> 端点，观察 <code>rag_answer</code> 和 <code>bare_answer</code> 的交错效果</li>
+        <li>尝试修改 <code>rag_compare_sse()</code> 中的交错顺序，看看有什么区别</li>
+      </ol>
+    </div>
+
+    <!-- Summary -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="icon">📋</span>
+        <h2>本课总结</h2>
+      </div>
+      <div class="card-body">
+        <ul class="summary-list">
+          <li><strong>SSE</strong> 是服务器向浏览器单向推送事件流的 HTTP 协议，比 WebSocket 更轻量</li>
+          <li>SSE 事件格式：<code>event: 事件名\ndata: 数据\n\n</code>，每条消息以空行分隔</li>
+          <li>RAG 需要流式输出因为 LLM 是 <strong>逐 token 生成</strong>的，流式能极大提升用户体验</li>
+          <li>本项目定义了 <strong>4 种结构化事件</strong>：retrieval、answer、citations、done</li>
+          <li><code>sse-starlette</code> 的 <code>EventSourceResponse</code> 将异步生成器自动转换为 SSE 响应</li>
+          <li><code>/compare</code> 端点实现了 RAG 与纯 LLM 回答的<strong>交错流式输出</strong></li>
+          <li>前端使用浏览器原生 <code>EventSource</code> API 消费 SSE，按事件类型分发处理</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <a href="08-fastapi-microservice.html" class="nav-prev">← 第 8 课：FastAPI 微服务架构</a>
+      <a href="01-rag-overview.html" class="nav-index">返回首页</a>
+      <a href="10-rag-pipeline.html" class="nav-next">第 10 课：RAG 完整管道 →</a>
+    </nav>
+
+  </div>
+  <script src="js/learning-script.js"></script>
+</body>
+</html>

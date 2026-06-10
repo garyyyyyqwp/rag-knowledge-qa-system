@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: rag-knowledge-qa
+    env: python
+    region: oregon
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: glm-4-flash
+      - key: OPENAI_BASE_URL
+        value: https://open.bigmodel.cn/api/paas/v4/
+      - key: EMBEDDING_PROVIDER
+        value: openai
+      - key: EMBEDDING_MODEL
+        value: embedding-2
+      - key: EMBEDDING_API_KEY
+        sync: false
+      - key: EMBEDDING_BASE_URL
+        value: https://open.bigmodel.cn/api/paas/v4/
+      - key: CHROMA_PERSIST_DIR
+        value: ./chroma_data_v2
+      - key: CHROMA_COLLECTION_NAME
+        value: knowledge_base_v2
+      - key: CHUNK_MAX_TOKENS
+        value: "512"
+      - key: CHUNK_OVERLAP_TOKENS
+        value: "50"
+      - key: RAG_TOP_K
+        value: "5"
+      - key: PYTHON_VERSION
+        value: "3.11"
