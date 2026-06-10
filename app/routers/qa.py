@@ -12,8 +12,7 @@ from app.services.rag_pipeline import (
     retrieve_chunks,
     generate_answer_stream,
     generate_bare_answer_stream,
-    _extract_citations,
-    _build_context,
+    extract_citations,
 )
 from app.services.llm import get_client, get_model
 from app.services.streaming import rag_ask_sse, rag_compare_sse, bare_ask_sse
@@ -36,7 +35,7 @@ async def ask_question(request: QuestionRequest):
     try:
         retrieved = await retrieve_chunks(question=request.question, top_k=request.top_k)
         answer_stream = generate_answer_stream(request.question, retrieved)
-        citations = _extract_citations(retrieved)
+        citations = extract_citations(retrieved)
     except EmbeddingError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -60,7 +59,7 @@ async def ask_question_sync(request: QuestionRequest):
         answer_parts.append(token)
     answer = "".join(answer_parts)
 
-    citations = _extract_citations(retrieved)
+    citations = extract_citations(retrieved)
 
     return AskResponse(
         answer=answer,
@@ -92,7 +91,7 @@ async def compare_rag_vs_bare(request: QuestionRequest):
         # RAG side
         retrieved = await retrieve_chunks(question=request.question, top_k=request.top_k)
         rag_stream = generate_answer_stream(request.question, retrieved)
-        citations = _extract_citations(retrieved)
+        citations = extract_citations(retrieved)
     except EmbeddingError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -124,7 +123,7 @@ async def compare_rag_vs_bare_sync(request: QuestionRequest):
         bare_parts.append(token)
     bare_answer = "".join(bare_parts)
 
-    citations = _extract_citations(retrieved)
+    citations = extract_citations(retrieved)
 
     return CompareResponse(
         rag_answer=rag_answer,
