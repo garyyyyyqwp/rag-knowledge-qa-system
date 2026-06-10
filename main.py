@@ -92,6 +92,10 @@ async def spa_fallback(full_path: str):
     if full_path.startswith("@vite/") or full_path.startswith("__vite"):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Not Found")
+    # Reject static asset requests — let the StaticFiles mount handle them
+    if full_path.startswith("static/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not Found")
     # Serve existing static files directly
     target = static_dir / full_path
     if target.exists() and target.is_file():
